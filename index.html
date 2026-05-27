@@ -917,10 +917,24 @@ function buildTexts() {
         if (o.numColor) parts.push(o.numColor);
         result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
       } else if (makeReadMode === 'numPlate') {
-        if (leather)    parts.push(leather);
-        if (o.numColor) parts.push(o.numColor);
-        if (o.num)      parts.push(convertNumField(o.num));
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
+        if (o.productType !== 'plate') return; // 주차번호판만 읽기
+        const colorPart = o.leatherColor.split('/')[0].trim(); // "/" 앞 색상 (블랙, 화이트 등)
+        const firstParts = [];
+        if (o.groupLabel) firstParts.push(o.groupLabel);
+        if (leather)      firstParts.push(leather);    // 가죽종류 (알칸타라, 크림 등)
+        if (o.numColor)   firstParts.push(o.numColor); // 숫자색상
+        if (firstParts.length) result.push({ text: firstParts.join(', '), orderIdx: idx, postDelay: 300 });
+        const digits = (o.num || '').replace(/\D/g, '').slice(-4).split('').filter(Boolean);
+        digits.forEach((d, i) => {
+          result.push({
+            text: DIGIT[parseInt(d)],
+            orderIdx: idx,
+            postDelay: i < digits.length - 1 ? 1500 : (colorPart ? 300 : 956),
+            numRate: true
+          });
+        });
+        if (colorPart) result.push({ text: colorPart, orderIdx: idx, postDelay: 956 });
+        if (!firstParts.length && !digits.length) result.push({ text: '(정보 없음)', orderIdx: idx });
       } else {
         // 번호 모드: 낱자 읽기
         if (leather)    parts.push(leather);
@@ -940,8 +954,8 @@ function buildTexts() {
       }
     });
 
-    // 기타 상품: 묶어서 건수 읽기
-    if (others.length) {
+    // 기타 상품: 묶어서 건수 읽기 (플레이트 모드 제외)
+    if (others.length && makeReadMode !== 'numPlate') {
       if (makeReadMode === 'leather') {
         const groups = new Map();
         others.forEach(({ o, idx }) => {
