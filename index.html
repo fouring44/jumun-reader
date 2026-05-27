@@ -353,7 +353,7 @@
         <button class="cat-tab"        data-pcat="set"     onclick="setPackCat('set')">세트</button>
         <button class="cat-tab"        data-pcat="plate"   onclick="setPackCat('plate')">주차번호판</button>
         <button class="cat-tab"        data-pcat="escape"  onclick="setPackCat('escape')">비상탈출</button>
-        <button class="cat-tab"        data-pcat="vent"    onclick="setPackCat('vent')">벤트</button>
+        <button class="cat-tab"        data-pcat="vent"    onclick="setPackCat('vent')">벤트 방향제</button>
       </div>
     </div>
 
@@ -802,7 +802,7 @@ function filterByPackCat(orders, cat) {
   if (cat === 'set')     return orders.filter(o => o.multiType === 'set');
   if (cat === 'plate')   return orders.filter(o => o.productType === 'plate' && o.multiType !== 'set');
   if (cat === 'escape')  return orders.filter(o => o.productType === 'other' && o.leatherColor.includes('비상탈출'));
-  if (cat === 'vent')    return orders.filter(o => o.productType === 'other' && o.leatherColor.includes('벤트'));
+  if (cat === 'vent')    return orders.filter(o => o.productType === 'other' && o.leatherColor.toLowerCase().includes('vent'));
   return orders;
 }
 
