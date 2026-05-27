@@ -310,8 +310,9 @@
     <div id="checkHeader" style="display:none">
       <div class="top-bar">
         <button class="back-btn" onclick="goBack()">← 뒤로</button>
-        <span style="font-size:15px; font-weight:600; color:var(--text)">전체 주문 검수</span>
+        <span style="font-size:15px; font-weight:600; color:var(--text)">검수</span>
       </div>
+      <div class="cat-tabs" id="checkBatchTabs"></div>
     </div>
 
     <div class="legend">
@@ -364,7 +365,7 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle';
-let currentMode = null, currentCat = 'all';
+let currentMode = null, currentCat = 'all', currentBatch = 'all';
 
 // ═══════════════════════════════════════════════
 //  DOM
@@ -376,7 +377,7 @@ const modeSelectEl    = $('modeSelect');
 const activeContent   = $('activeContent');
 const makeHeader      = $('makeHeader');
 const checkHeader     = $('checkHeader');
-const makeBatchBadges = $('makeBatchBadges');
+const makeBatchBadges  = $('makeBatchBadges');
 const sheetTabs       = $('sheetTabs');
 const dataTable       = $('dataTable');
 const playBtn         = $('playBtn');
@@ -403,6 +404,20 @@ uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.style.
 fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
 rateRange.addEventListener('input',  () => rateVal.textContent  = parseFloat(rateRange.value).toFixed(1));
 pitchRange.addEventListener('input', () => pitchVal.textContent = parseFloat(pitchRange.value).toFixed(1));
+
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space') return;
+  if (['INPUT','SELECT','TEXTAREA','BUTTON'].includes(e.target.tagName)) return;
+  e.preventDefault();
+  if (ttsState === 'speaking') {
+    window.speechSynthesis.cancel();
+    setUIState('paused');
+    statusText.textContent = `⏸ ${currentIdx + 1} / ${utterances.length}건에서 일시정지`;
+  } else if (ttsState === 'paused') {
+    setUIState('speaking');
+    speakAt(currentIdx);
+  }
+});
 
 // ═══════════════════════════════════════════════
 //  숫자 변환 유틸
@@ -614,14 +629,16 @@ function renderSheetTabs() {
 //  모드 전환
 // ═══════════════════════════════════════════════
 function enterMode(mode) {
-  currentMode = mode;
-  currentCat  = 'all';
+  currentMode  = mode;
+  currentCat   = 'all';
+  currentBatch = 'all';
   modeSelectEl.style.display  = 'none';
   activeContent.style.display = 'block';
   makeHeader.style.display    = mode === 'make'  ? 'block' : 'none';
   checkHeader.style.display   = mode === 'check' ? 'block' : 'none';
   headerSub.textContent       = mode === 'make'  ? '제작' : '검수';
-  if (mode === 'make') renderBatchBadges();
+  if (mode === 'make')  renderBatchBadges();
+  if (mode === 'check') renderCheckBatchTabs();
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
   loadSheet(currentSheet);
   setUIState('idle');
@@ -629,8 +646,9 @@ function enterMode(mode) {
 
 function goBack() {
   doStop();
-  currentMode = null;
-  currentCat  = 'all';
+  currentMode  = null;
+  currentCat   = 'all';
+  currentBatch = 'all';
   activeContent.style.display = 'none';
   modeSelectEl.style.display  = 'block';
   headerSub.textContent       = fileNameLabel.textContent.replace('📄 ', '');
@@ -652,6 +670,31 @@ function renderBatchBadges() {
     : '<span class="badge badge-other">1차 주문</span>';
 }
 
+function renderCheckBatchTabs() {
+  const orders = groupedOrders[currentSheet] || [];
+  const batchSet = new Set();
+  orders.forEach(o => batchSet.add(o.batch || '1차'));
+  const batches = [...batchSet].sort((a, b) => parseInt(a) - parseInt(b));
+
+  const tabs = $('checkBatchTabs');
+  if (!tabs) return;
+  tabs.innerHTML = [
+    `<button class="cat-tab active" data-batch="all" onclick="setCheckBatch('all')">전체</button>`,
+    ...batches.map(b =>
+      `<button class="cat-tab" data-batch="${b}" onclick="setCheckBatch('${b}')">${b}</button>`)
+  ].join('');
+}
+
+function setCheckBatch(batch) {
+  currentBatch = batch;
+  document.querySelectorAll('#checkBatchTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.batch === batch)
+  );
+  doStop();
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
 function loadSheet(name) {
   currentSheet = name;
   document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.textContent === name));
@@ -662,6 +705,10 @@ function loadSheet(name) {
     orders = currentCat === 'set'
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
+  }
+  // 검수 모드: 차수 필터 적용
+  if (currentMode === 'check' && currentBatch !== 'all') {
+    orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
 
   dataTable.innerHTML = '';
@@ -710,6 +757,9 @@ function buildTexts() {
     orders = currentCat === 'set'
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
+  }
+  if (currentMode === 'check' && currentBatch !== 'all') {
+    orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
 
   return orders
