@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="주문읽기">
+<title>주문 읽기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f5f5;
+    --bg3: #ebebeb;
+    --text: #1a1a1a;
+    --text2: #666666;
+    --border: rgba(0,0,0,0.12);
+    --border2: rgba(0,0,0,0.22);
+    --blue: #185FA5;
+    --blue-light: #E6F1FB;
+    --green: #0F6E56;
+    --green-light: #EAF3DE;
+    --green-mid: #C0DD97;
+    --green-dark: #3B6D11;
+    --red: #A32D2D;
+    --orange-light: #F5C4B3;
+    --orange-dark: #993C1D;
+    --amber: #BA7517;
+    --radius: 10px;
+    --radius-sm: 7px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --bg2: #2c2c2e;
+      --bg3: #3a3a3c;
+      --text: #f2f2f7;
+      --text2: #aeaeb2;
+      --border: rgba(255,255,255,0.12);
+      --border2: rgba(255,255,255,0.22);
+      --blue-light: #0c3060;
+      --green-light: #1a3020;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, 'Helvetica Neue', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ── 헤더 ── */
+  header {
+    background: var(--bg);
+    border-bottom: 0.5px solid var(--border);
+    padding: 14px 20px 12px;
+    position: sticky; top: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header span { font-size: 13px; color: var(--text2); }
+
+  /* ── 본문 ── */
+  .page { padding: 16px 16px 100px; }
+
+  /* ── 업로드 존 ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border2);
+    border-radius: var(--radius);
+    padding: 36px 20px;
+    text-align: center;
+    cursor: pointer;
+    background: var(--bg2);
+    margin-bottom: 16px;
+    transition: background 0.15s;
+  }
+  .upload-zone:active { background: var(--bg3); }
+  .upload-icon { font-size: 40px; margin-bottom: 10px; }
+  .upload-title { font-size: 16px; font-weight: 500; margin-bottom: 4px; }
+  .upload-sub { font-size: 13px; color: var(--text2); }
+  #fileInput { display: none; }
+
+  /* ── 파일명 ── */
+  .file-label {
+    font-size: 13px; color: var(--text2);
+    margin-bottom: 12px; padding: 0 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .file-label button {
+    font-size: 12px; color: var(--blue);
+    background: none; border: none; cursor: pointer; padding: 0;
+  }
+
+  /* ── 시트 탭 ── */
+  .sheet-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; overflow-x: auto; padding-bottom: 4px; }
+  .sheet-tab {
+    font-size: 13px; font-weight: 500;
+    padding: 6px 16px; border-radius: 20px;
+    border: 0.5px solid var(--border2);
+    background: var(--bg2); color: var(--text2);
+    cursor: pointer; white-space: nowrap;
+    transition: all 0.1s;
+  }
+  .sheet-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  /* ── 범례 ── */
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text2); }
+  .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* ── 테이블 ── */
+  .table-wrap {
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto; max-height: 280px;
+    margin-bottom: 16px;
+    background: var(--bg);
+    -webkit-overflow-scrolling: touch;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    background: var(--bg2); color: var(--text2);
+    font-weight: 500; font-size: 11px;
+    padding: 7px 9px;
+    border-bottom: 0.5px solid var(--border);
+    text-align: left; position: sticky; top: 0;
+    white-space: nowrap;
+  }
+  td { padding: 6px 9px; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr.row-skip td { opacity: 0.38; }
+  tr.row-multi td { background: var(--green-light); }
+  tr.row-reading td { background: var(--blue-light) !important; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    padding: 1px 7px; border-radius: 20px; margin-left: 4px; vertical-align: middle;
+  }
+  .badge-multi { background: var(--green-mid); color: var(--green-dark); }
+  .badge-skip { background: var(--orange-light); color: var(--orange-dark); }
+
+  /* ── 컨트롤 패널 ── */
+  .panel {
+    background: var(--bg2);
+    border-radius: var(--radius);
+    border: 0.5px solid var(--border);
+    padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .ctrl-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .ctrl-row:last-child { margin-bottom: 0; }
+  .ctrl-label { font-size: 13px; color: var(--text2); min-width: 48px; }
+  select {
+    font-size: 13px; padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2);
+    background: var(--bg); color: var(--text);
+    flex: 1; max-width: 240px;
+  }
+  input[type=range] { flex: 1; max-width: 120px; accent-color: var(--blue); }
+  .val { font-size: 13px; font-weight: 600; color: var(--text); min-width: 28px; }
+
+  /* ── 재생 버튼 영역 ── */
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .btn {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    font-size: 15px; font-weight: 600;
+    padding: 12px 22px; border-radius: var(--radius);
+    border: none; cursor: pointer;
+    transition: opacity 0.1s, transform 0.08s;
+    -webkit-user-select: none;
+  }
+  .btn:active { transform: scale(0.96); opacity: 0.85; }
+  .btn:disabled { opacity: 0.3; pointer-events: none; }
+  .btn-play  { background: var(--blue); color: #fff; flex: 1; }
+  .btn-resume { background: var(--green); color: #fff; flex: 1; }
+  .btn-pause { background: var(--bg3); color: var(--text); flex: 1; border: 0.5px solid var(--border2); }
+  .btn-stop  { background: var(--red); color: #fff; }
+
+  /* ── 상태 바 ── */
+  .status-bar {
+    background: var(--bg);
+    border: 0.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13px; color: var(--text2);
+    display: flex; align-items: center; gap: 10px;
+    min-height: 46px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--border2); flex-shrink: 0; }
+  .dot.speaking { background: #1D9E75; animation: pulse 1s infinite; }
+  .dot.paused   { background: var(--amber); }
+  .dot.ready    { background: var(--blue); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.35} }
+
+  /* ── 현재 읽는 텍스트 미리보기 ── */
+  .preview {
+    margin-top: 10px;
+    padding: 10px 14px;
+    background: var(--blue-light);
+    border-radius: var(--radius-sm);
+    font-size: 13px; color: var(--blue);
+    display: none; line-height: 1.5;
+    word-break: keep-all;
+  }
+  .preview.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📋 주문 읽기</h1>
+  <span id="headerSub">파일을 불러오세요</span>
+</header>
+
+<div class="page">
+
+  <!-- 업로드 -->
+  <div class="upload-zone" id="uploadZone">
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+    <div class="upload-icon">📂</div>
+    <div class="upload-title">엑셀 파일 열기</div>
+    <div class="upload-sub">.xlsx / .xls / .csv 지원</div>
+  </div>
+
+  <!-- 파일 로드 후 영역 -->
+  <div id="mainContent" style="display:none">
+
+    <div class="file-label">
+      <span id="fileNameLabel"></span>
+      <button onclick="resetFile()">다른 파일 열기</button>
+    </div>
+
+    <div class="sheet-tabs" id="sheetTabs"></div>
+
+    <div class="legend">
+      <div class="legend-item"><div class="legend-dot" style="background:var(--green-mid)"></div> 2개 이상 주문</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--orange-light)"></div> 읽기 제외</div>
+    </div>
+
+    <div class="table-wrap">
+      <table id="dataTable"></table>
+    </div>
+
+    <!-- 설정 -->
+    <div class="panel">
+      <div class="ctrl-row">
+        <span class="ctrl-label">목소리</span>
+        <select id="voiceSelect"></select>
+      </div>
+      <div class="ctrl-row">
+        <span class="ctrl-label">속도</span>
+        <input type="range" id="rateRange" min="0.5" max="2" step="0.1" value="1">
+        <span class="val" id="rateVal">1.0</span>
+        <span class="ctrl-label" style="margin-left:4px">음높이</span>
+        <input type="range" id="pitchRange" min="0.5" max="2" step="0.1" value="1">
+        <span class="val" id="pitchVal">1.0</span>
+      </div>
+    </div>
+
+    <!-- 버튼 -->
+    <div class="btn-row">
+      <button class="btn btn-play" id="playBtn" disabled>▶ 읽기 시작</button>
+      <button class="btn btn-pause" id="pauseBtn" disabled>⏸ 일시정지</button>
+      <button class="btn btn-stop" id="stopBtn" disabled>■ 정지</button>
+    </div>
+
+    <!-- 상태 -->
+    <div class="status-bar">
+      <div class="dot ready" id="statusDot"></div>
+      <span id="statusText">읽기 준비 완료</span>
+    </div>
+
+    <!-- 현재 읽는 내용 미리보기 -->
+    <div class="preview" id="preview"></div>
+
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+//  상태
+// ═══════════════════════════════════════════════
+let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
+let utterances = [], currentIdx = 0, ttsState = 'idle';
+
+// ═══════════════════════════════════════════════
+//  DOM
+// ═══════════════════════════════════════════════
+const $ = id => document.getElementById(id);
+const uploadZone    = $('uploadZone');
+const fileInput     = $('fileInput');
+const mainContent   = $('mainContent');
+const sheetTabs     = $('sheetTabs');
+const dataTable     = $('dataTable');
+const playBtn       = $('playBtn');
+const pauseBtn      = $('pauseBtn');
+const stopBtn       = $('stopBtn');
+const statusDot     = $('statusDot');
+const statusText    = $('statusText');
+const voiceSelect   = $('voiceSelect');
+const rateRange     = $('rateRange');
+const pitchRange    = $('pitchRange');
+const rateVal       = $('rateVal');
+const pitchVal      = $('pitchVal');
+const fileNameLabel = $('fileNameLabel');
+const headerSub     = $('headerSub');
+const preview       = $('preview');
+
+// ═══════════════════════════════════════════════
+//  이벤트
+// ═══════════════════════════════════════════════
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.background = 'var(--bg3)'; });
+uploadZone.addEventListener('dragleave', () => uploadZone.style.background = '');
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.style.background = ''; if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if (e.target.files[0]) loadFile(e.target.files[0]); });
+rateRange.addEventListener('input',  () => rateVal.textContent  = parseFloat(rateRange.value).toFixed(1));
+pitchRange.addEventListener('input', () => pitchVal.textContent = parseFloat(pitchRange.value).toFixed(1));
+
+// ═══════════════════════════════════════════════
+//  숫자 변환 유틸
+// ═══════════════════════════════════════════════
+const SINO   = ['','일','이','삼','사','오','육','칠','팔','구','십','십일','십이','십삼','십사','십오','십육','십칠','십팔','십구','이십','이십일','이십이','이십삼','이십사','이십오','이십육','이십칠','이십팔','이십구','삼십'];
+const NATIVE = ['','한','두','세','네','다섯','여섯','일곱','여덟','아홉','열'];
+const DIGIT  = ['공','일','이','삼','사','오','육','칠','팔','구'];
+
+function sinoNum(n) { const i = parseInt(n); return (i > 0 && i < SINO.length) ? SINO[i] : String(i); }
+
+function convertNumField(s) {
+  // 수량 (1개 → 한개)
+  s = s.replace(/(\d+)\s*(개입|개|장|세트|묶음|쌍)/g, (_, n, unit) => {
+    const ni = parseInt(n);
+    return ((ni > 0 && ni <= 10) ? NATIVE[ni] : sinoNum(ni)) + unit;
+  });
+  // 나머지 숫자 낱자 읽기 (하이픈 구분자 제거)
+  s = s.replace(/[\-]?\s*(\d[\d\-]*)/g, (_, part) => {
+    return ' ' + part.replace(/\-/g, '').split('').map(d => DIGIT[parseInt(d)]).join('');
+  });
+  return s.trim();
+}
+
+// ═══════════════════════════════════════════════
+//  파싱
+// ═══════════════════════════════════════════════
+function str(v) { return (v == null) ? '' : String(v).trim(); }
+
+function parseOrders(rows) {
+  let hi = -1, colMap = {};
+  for (let i = 0; i < rows.length; i++) {
+    const joined = rows[i].map(str).join('|');
+    if (joined.includes('수령인') || joined.includes('번호')) {
+      hi = i; rows[i].forEach((h, j) => { colMap[str(h)] = j; }); break;
+    }
+  }
+  if (hi === -1) return [];
+
+  const C_NO   = colMap['번호']   ?? 1;
+  const C_NAME = colMap['수령인'] ?? 2;
+  const C_NUM  = colMap['숫자']   ?? 5;
+  const C_NOTE = colMap['비고']   ?? 8;
+  const headers = rows[hi].map(str);
+  const orders = []; let last = null;
+
+  for (let i = hi + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.every(c => c == null || str(c) === '')) continue;
+    const no = str(row[C_NO]), name = str(row[C_NAME]);
+    const num = str(row[C_NUM]), note = str(row[C_NOTE]);
+
+    if (!no && !name && row.some(c => str(c) !== '')) { if (last) last.count++; continue; }
+    if (!name) continue;
+
+    const skip = !num || note.includes('확인중');
+    const o = { no, name, num, note, row, headers, count: 1, skip,
+      skipReason: skip ? (note.includes('확인중') ? '확인중' : '숫자없음') : '' };
+    orders.push(o);
+    last = skip ? null : o;
+  }
+  return orders;
+}
+
+// ═══════════════════════════════════════════════
+//  파일 로드
+// ═══════════════════════════════════════════════
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = new Uint8Array(e.target.result);
+    workbook = XLSX.read(data, { type: 'array' });
+    rawSheets = {}; groupedOrders = {};
+    workbook.SheetNames.forEach(name => {
+      rawSheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: null });
+      groupedOrders[name] = parseOrders(rawSheets[name]);
+    });
+    fileNameLabel.textContent = '📄 ' + file.name;
+    headerSub.textContent = file.name;
+    mainContent.style.display = 'block';
+    uploadZone.style.display = 'none';
+    renderSheetTabs();
+    loadSheet(workbook.SheetNames[0]);
+    loadVoices();
+    setUIState('idle');
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function resetFile() {
+  doStop();
+  mainContent.style.display = 'none';
+  uploadZone.style.display = 'block';
+  headerSub.textContent = '파일을 불러오세요';
+  fileInput.value = '';
+}
+
+// ═══════════════════════════════════════════════
+//  시트 / 테이블
+// ═══════════════════════════════════════════════
+function renderSheetTabs() {
+  sheetTabs.innerHTML = '';
+  workbook.SheetNames.forEach(name => {
+    const tab = document.createElement('button');
+    tab.className = 'sheet-tab';
+    tab.textContent = name;
+    tab.onclick = () => { doStop(); loadSheet(name); };
+    sheetTabs.appendChild(tab);
+  });
+}
+
+function loadSheet(name) {
+  currentSheet = name;
+  document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.textContent === name));
+  const orders = groupedOrders[name] || [];
+  dataTable.innerHTML = '';
+  if (!orders.length) return;
+
+  const thead = document.createElement('thead');
+  thead.innerHTML = '<tr><th>번호</th><th>수령인</th><th>가죽컬러</th><th>숫자컬러</th><th>숫자</th><th>비고</th><th>상태</th></tr>';
+  dataTable.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  orders.forEach((o, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.orderIdx = idx;
+    if (o.skip) tr.classList.add('row-skip');
+    else if (o.count > 1) tr.classList.add('row-multi');
+    const gc = key => { const ci = o.headers.indexOf(key); return ci >= 0 ? str(o.row[ci]) : ''; };
+    const badge = o.skip
+      ? `<span class="badge badge-skip">${o.skipReason}</span>`
+      : o.count > 1 ? `<span class="badge badge-multi">${o.count}개 주문</span>` : '';
+    tr.innerHTML = `<td>${o.no}</td><td>${o.name}</td><td>${gc('가죽컬러')}</td><td>${gc('숫자컬러')}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
+    tbody.appendChild(tr);
+  });
+  dataTable.appendChild(tbody);
+}
+
+// ═══════════════════════════════════════════════
+//  TTS 텍스트 빌드
+// ═══════════════════════════════════════════════
+function buildTexts() {
+  return (groupedOrders[currentSheet] || [])
+    .map((o, idx) => ({ o, idx }))
+    .filter(({ o }) => !o.skip)
+    .map(({ o, idx }) => {
+      const gc = key => { const ci = o.headers.indexOf(key); return ci >= 0 ? str(o.row[ci]) : ''; };
+      const leather = gc('가죽컬러'), numColor = gc('숫자컬러');
+      let t = `${sinoNum(o.no)}번, ${o.name}`;
+      if (o.count > 1) t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
+      if (leather)  t += `, ${leather}`;
+      if (numColor) t += `, 숫자색 ${numColor}`;
+      if (o.num)    t += `, 번호 ${convertNumField(o.num)}`;
+      if (o.note)   t += `, ${o.note}`;
+      return { text: t, orderIdx: idx };
+    });
+}
+
+// ═══════════════════════════════════════════════
+//  UI 상태
+// ═══════════════════════════════════════════════
+function setUIState(state) {
+  ttsState = state;
+  if (state === 'idle') {
+    playBtn.textContent = '▶ 읽기 시작';
+    playBtn.className = 'btn btn-play';
+    playBtn.disabled = false;
+    pauseBtn.disabled = true; pauseBtn.textContent = '⏸ 일시정지';
+    stopBtn.disabled = true;
+    statusDot.className = 'dot ready';
+    statusText.textContent = '읽기 준비 완료';
+    preview.classList.remove('visible'); preview.textContent = '';
+    highlightRow(null);
+  } else if (state === 'speaking') {
+    playBtn.disabled = true;
+    pauseBtn.disabled = false;
+    stopBtn.disabled = false;
+    statusDot.className = 'dot speaking';
+  } else if (state === 'paused') {
+    playBtn.textContent = '▶ 재개';
+    playBtn.className = 'btn btn-resume';
+    playBtn.disabled = false;
+    pauseBtn.disabled = true;
+    stopBtn.disabled = false;
+    statusDot.className = 'dot paused';
+  }
+}
+
+function highlightRow(orderIdx) {
+  document.querySelectorAll('#dataTable tr[data-order-idx]').forEach(tr => tr.classList.remove('row-reading'));
+  if (orderIdx != null) {
+    const tr = document.querySelector(`#dataTable tr[data-order-idx="${orderIdx}"]`);
+    if (tr) { tr.classList.add('row-reading'); tr.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  TTS 재생
+// ═══════════════════════════════════════════════
+function speakAt(idx) {
+  if (idx >= utterances.length) {
+    setUIState('idle');
+    statusText.textContent = '✅ 읽기 완료';
+    return;
+  }
+  const { text, orderIdx } = utterances[idx];
+  currentIdx = idx;
+  highlightRow(orderIdx);
+  statusText.textContent = `${idx + 1} / ${utterances.length}건 읽는 중...`;
+  preview.textContent = text;
+  preview.classList.add('visible');
+
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang  = 'ko-KR';
+  u.rate  = parseFloat(rateRange.value);
+  u.pitch = parseFloat(pitchRange.value);
+  const sel = voiceSelect.value;
+  if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
+  u.onend   = () => { if (ttsState === 'speaking') speakAt(idx + 1); };
+  u.onerror = e => { if (e.error === 'interrupted') return; if (ttsState === 'speaking') speakAt(idx + 1); };
+  window.speechSynthesis.speak(u);
+}
+
+// ═══════════════════════════════════════════════
+//  버튼 핸들러
+// ═══════════════════════════════════════════════
+playBtn.addEventListener('click', () => {
+  if (ttsState === 'paused') {
+    setUIState('speaking'); speakAt(currentIdx);
+  } else {
+    utterances = buildTexts();
+    if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
+    currentIdx = 0;
+    window.speechSynthesis.cancel();
+    setUIState('speaking'); speakAt(0);
+  }
+});
+
+pauseBtn.addEventListener('click', () => {
+  if (ttsState !== 'speaking') return;
+  window.speechSynthesis.cancel();
+  setUIState('paused');
+  statusText.textContent = `⏸ ${currentIdx + 1} / ${utterances.length}건에서 일시정지`;
+});
+
+stopBtn.addEventListener('click', doStop);
+function doStop() { window.speechSynthesis.cancel(); setUIState('idle'); }
+
+// ═══════════════════════════════════════════════
+//  목소리 로드
+// ═══════════════════════════════════════════════
+function loadVoices() {
+  const populate = () => {
+    const voices = window.speechSynthesis.getVoices();
+    voiceSelect.innerHTML = '';
+    const ko = voices.filter(v => v.lang && v.lang.startsWith('ko'));
+    const etc = voices.filter(v => !v.lang || !v.lang.startsWith('ko'));
+    if (ko.length) {
+      const g = document.createElement('optgroup'); g.label = '한국어';
+      ko.forEach((v, i) => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + (v.default ? ' (기본)' : ''); if (i === 0) o.selected = true; g.appendChild(o); });
+      voiceSelect.appendChild(g);
+    }
+    if (etc.length) {
+      const g = document.createElement('optgroup'); g.label = '기타';
+      etc.forEach(v => { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name; g.appendChild(o); });
+      voiceSelect.appendChild(g);
+    }
+  };
+  window.speechSynthesis.onvoiceschanged = populate;
+  populate();
+}
+</script>
+</body>
+</html>
