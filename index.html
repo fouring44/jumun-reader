@@ -27,6 +27,8 @@
     --orange-light: #F5C4B3;
     --orange-dark: #993C1D;
     --amber: #BA7517;
+    --yellow-light: #FFF4C2;
+    --accent: #BA7517;
     --radius: 10px;
     --radius-sm: 7px;
   }
@@ -41,6 +43,8 @@
       --border2: rgba(255,255,255,0.22);
       --blue-light: #0c3060;
       --green-light: #1a3020;
+      --yellow-light: #5a4400;
+      --accent: #E8B14A;
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -135,8 +139,10 @@
   tr.row-skip td { opacity: 0.38; }
   tr.row-multi td { background: var(--green-light); }
   tr.row-reading td { background: var(--blue-light) !important; }
+  tr.row-selected td { box-shadow: inset 3px 0 0 var(--accent); background: var(--yellow-light) !important; }
   #dataTable tbody tr[data-order-idx]:not(.row-skip):hover td { background: var(--bg3); }
   #dataTable tbody tr.row-reading:hover td { background: var(--blue-light) !important; }
+  #dataTable tbody tr.row-selected:hover td { background: var(--yellow-light) !important; }
   .badge {
     display: inline-block; font-size: 10px; font-weight: 600;
     padding: 1px 7px; border-radius: 20px; margin-left: 4px; vertical-align: middle;
@@ -410,7 +416,7 @@
 //  상태
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
-let utterances = [], currentIdx = 0, ttsState = 'idle';
+let utterances = [], currentIdx = 0, ttsState = 'idle', selectedOrderIdx = null;
 let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all';
 
 // ═══════════════════════════════════════════════
@@ -831,6 +837,7 @@ function loadSheet(name) {
   }
 
   dataTable.innerHTML = '';
+  selectedOrderIdx = null;
   if (!orders.length) {
     dataTable.innerHTML = '<tbody><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text2)">해당 카테고리의 주문이 없습니다</td></tr></tbody>';
     return;
@@ -863,8 +870,8 @@ function loadSheet(name) {
     tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
     if (!o.skip) {
       tr.style.cursor = 'pointer';
-      tr.title = '클릭하면 이 행부터 읽기 시작';
-      tr.addEventListener('click', () => startFromRow(idx));
+      tr.title = '클릭하여 선택 후 ▶ 읽기 시작을 누르세요';
+      tr.addEventListener('click', () => selectRow(idx));
     }
     tbody.appendChild(tr);
   });
@@ -1171,9 +1178,14 @@ playBtn.addEventListener('click', () => {
   } else {
     utterances = buildTexts();
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
-    currentIdx = 0;
+    let startIdx = 0;
+    if (selectedOrderIdx != null) {
+      const found = utterances.findIndex(u => u.orderIdx === selectedOrderIdx);
+      if (found !== -1) startIdx = found;
+    }
+    currentIdx = startIdx;
     window.speechSynthesis.cancel();
-    setUIState('speaking'); speakAt(0);
+    setUIState('speaking'); speakAt(startIdx);
   }
 });
 
@@ -1187,15 +1199,18 @@ pauseBtn.addEventListener('click', () => {
 stopBtn.addEventListener('click', doStop);
 function doStop() { window.speechSynthesis.cancel(); setUIState('idle'); }
 
-function startFromRow(orderIdx) {
-  window.speechSynthesis.cancel();
-  utterances = buildTexts();
-  if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
-  const startIdx = utterances.findIndex(u => u.orderIdx === orderIdx);
-  if (startIdx === -1) { statusText.textContent = '이 행은 읽을 수 없습니다'; return; }
-  currentIdx = startIdx;
-  setUIState('speaking');
-  speakAt(startIdx);
+function selectRow(orderIdx) {
+  if (selectedOrderIdx === orderIdx) { clearSelection(); statusText.textContent = '선택 해제됨'; return; }
+  selectedOrderIdx = orderIdx;
+  document.querySelectorAll('#dataTable tr[data-order-idx]').forEach(tr => tr.classList.remove('row-selected'));
+  const tr = document.querySelector(`#dataTable tr[data-order-idx="${orderIdx}"]`);
+  if (tr) tr.classList.add('row-selected');
+  statusText.textContent = `행 선택됨 — ▶ 읽기 시작을 누르세요`;
+}
+
+function clearSelection() {
+  selectedOrderIdx = null;
+  document.querySelectorAll('#dataTable tr.row-selected').forEach(tr => tr.classList.remove('row-selected'));
 }
 
 // ═══════════════════════════════════════════════
