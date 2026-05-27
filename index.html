@@ -934,7 +934,7 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 900 : (colorPart ? 300 : 956),
+            postDelay: i < digits.length - 1 ? 630 : (colorPart ? 300 : 956),
             numRate2: true   // 현재 numRate보다 40% 느림 (baseRate * 0.48)
           });
         });
@@ -1143,7 +1143,7 @@ function speakAt(idx) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang  = 'ko-KR';
   const baseRate = parseFloat(rateRange.value);
-  u.rate  = numRate2 ? parseFloat((baseRate * 1.4742).toFixed(2)) : numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
+  u.rate  = numRate2 ? parseFloat((baseRate * 0.624).toFixed(2)) : numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
   u.pitch = parseFloat(pitchRange.value);
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
