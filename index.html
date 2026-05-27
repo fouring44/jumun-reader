@@ -919,32 +919,36 @@ function buildTexts() {
     const result   = [];
 
     // 주차번호판·키링: 기존 낱개 읽기
+    const nativeCount = n => (n > 0 && n < NATIVE.length ? NATIVE[n] : String(n)) + '개';
     nonOther.forEach(({ o, idx }) => {
       const leather = leatherOf(o);
+      const isPlateMulti = o.productType === 'plate' && o.count > 1;
       const parts = [];
       if (o.groupLabel) parts.push(o.groupLabel);
 
       if (makeReadMode === 'leather') {
         if (leather) parts.push(leather);
+        if (isPlateMulti) parts.push(nativeCount(o.count));
         result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
       } else if (makeReadMode === 'numColor') {
         if (leather)    parts.push(leather);
         if (o.numColor) parts.push(o.numColor);
+        if (isPlateMulti) parts.push(nativeCount(o.count));
         result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
       } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
         const p1Parts = [];
-        if (o.groupLabel)      p1Parts.push(o.groupLabel);
-        else if (o.count > 1)  p1Parts.push(`${o.count}개`);
+        if (o.groupLabel)  p1Parts.push(o.groupLabel);
         p1Parts.push(colorPart ? `${colorPart} 플레이트` : '(정보 없음)');
+        if (isPlateMulti)  p1Parts.push(nativeCount(o.count));
         result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 956 });
       } else if (makeReadMode === 'plate2') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
         const firstParts = [];
-        if (o.groupLabel)      firstParts.push(o.groupLabel);
-        else if (o.count > 1)  firstParts.push(`${o.count}개`);
+        if (o.groupLabel)  firstParts.push(o.groupLabel);
+        if (isPlateMulti)  firstParts.push(nativeCount(o.count));
         if (leather)      firstParts.push(leather);
         if (o.numColor)   firstParts.push(o.numColor);
         if (firstParts.length) result.push({ text: firstParts.join(', '), orderIdx: idx, postDelay: 300 });
