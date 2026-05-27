@@ -498,7 +498,8 @@ function sinoNum(n) { const i = parseInt(n); return (i > 0 && i < SINO.length) ?
 function detectProductType(leatherColor, num) {
   if (!leatherColor) return 'other';
   if (leatherColor.includes('/')) return 'plate';
-  if (num && /^\d{4}$/.test(num.trim())) return 'keyring';
+  // 키링: 숫자 필드가 4자리 수로 시작 (예: "5299", "4717(1개)", "5299 -1개")
+  if (num && /^\d{4}(?!\d)/.test(num.trim())) return 'keyring';
   return 'other';
 }
 
@@ -606,7 +607,29 @@ function parseOrders(rows) {
     const numColor     = C_NUMCOL  >= 0 ? str(row[C_NUMCOL])  : '';
     const invoice      = C_INV     >= 0 ? str(row[C_INV])     : '';
 
-    if (!no && !name && row.some(c => str(c) !== '')) { if (last) last.count++; continue; }
+    if (!no && !name) {
+      if (!last) continue;
+      // 같은 사람의 추가 주문: 가죽컬러나 숫자가 별도로 있으면 새 주문으로 처리
+      const hasDistinctData = (leatherColor && leatherColor !== last.leatherColor) ||
+                              (num && num !== last.num);
+      if (hasDistinctData) {
+        const skip2        = !num || note.includes('확인중');
+        const productType2 = detectProductType(leatherColor, num);
+        const batch2       = detectBatch(invoice);
+        const o2 = {
+          no: '', name: last.name, num, note, row, headers, count: 1, skip: skip2,
+          skipReason: skip2 ? (note.includes('확인중') ? '확인중' : '숫자없음') : '',
+          leatherColor, numColor, invoice, productType: productType2, batch: batch2,
+          multiType: 'single', groupLabel: ''
+        };
+        orders.push(o2);
+        if (!skip2) last = o2;
+        continue;
+      }
+      // 단순 빈 연속 행 → 수량 카운트만 증가
+      if (row.some(c => str(c) !== '')) last.count++;
+      continue;
+    }
     if (!name) continue;
 
     const skip        = !num || note.includes('확인중');
