@@ -138,6 +138,7 @@
   tr:last-child td { border-bottom: none; }
   tr.row-skip td { opacity: 0.38; }
   tr.row-multi td { background: var(--green-light); }
+  tr.row-person-multi td { color: var(--red); font-weight: 600; }
   tr.row-reading td { background: var(--blue-light) !important; }
   tr.row-selected td { box-shadow: inset 3px 0 0 var(--accent); background: var(--yellow-light) !important; }
   #dataTable tbody tr[data-order-idx]:not(.row-skip):hover td { background: var(--bg3); }
@@ -377,6 +378,7 @@
 
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--green-mid)"></div> 2개 이상 주문</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> 동일인 다중 주문</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--orange-light)"></div> 읽기 제외</div>
     </div>
 
@@ -915,6 +917,7 @@ function loadSheet(name) {
     tr.dataset.orderIdx = idx;
     if (o.skip) tr.classList.add('row-skip');
     else if (o.count > 1) tr.classList.add('row-multi');
+    if (o.multiType && o.multiType !== 'single') tr.classList.add('row-person-multi');
     let badge = '';
     if (o.skip) {
       badge = `<span class="badge badge-skip">${o.skipReason}</span>`;
