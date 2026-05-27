@@ -138,8 +138,12 @@
     display: inline-block; font-size: 10px; font-weight: 600;
     padding: 1px 7px; border-radius: 20px; margin-left: 4px; vertical-align: middle;
   }
-  .badge-multi { background: var(--green-mid); color: var(--green-dark); }
-  .badge-skip { background: var(--orange-light); color: var(--orange-dark); }
+  .badge-multi   { background: var(--green-mid); color: var(--green-dark); }
+  .badge-skip    { background: var(--orange-light); color: var(--orange-dark); }
+  .badge-plate   { background: #d4e6ff; color: #1a4a8a; }
+  .badge-keyring { background: #e8d4ff; color: #5a1a8a; }
+  .badge-other   { background: var(--bg3); color: var(--text2); }
+  .badge-batch   { background: #fff3cd; color: #856404; }
 
   /* ── 컨트롤 패널 ── */
   .panel {
@@ -206,6 +210,37 @@
     word-break: keep-all;
   }
   .preview.visible { display: block; }
+
+  /* ── 모드 선택 ── */
+  .mode-wrap { padding: 8px 0 20px; display: flex; flex-direction: column; gap: 14px; }
+  .mode-btn {
+    width: 100%; padding: 32px 20px;
+    border-radius: var(--radius); border: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: opacity 0.1s, transform 0.08s; -webkit-user-select: none;
+  }
+  .mode-btn:active { transform: scale(0.97); opacity: 0.85; }
+  .mode-btn-make  { background: var(--blue); color: #fff; }
+  .mode-btn-check { background: var(--green); color: #fff; }
+  .mode-icon  { font-size: 36px; }
+  .mode-title { font-size: 22px; font-weight: 700; }
+  .mode-sub   { font-size: 13px; opacity: 0.78; }
+
+  /* ── 뒤로가기 / 배치 바 ── */
+  .top-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+  .back-btn { font-size: 15px; color: var(--blue); background: none; border: none; cursor: pointer; padding: 4px 0; flex-shrink: 0; }
+  .batch-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* ── 카테고리 탭 ── */
+  .cat-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .cat-tab {
+    font-size: 13px; font-weight: 500;
+    padding: 7px 18px; border-radius: 20px;
+    border: 0.5px solid var(--border2);
+    background: var(--bg2); color: var(--text2);
+    cursor: pointer; white-space: nowrap; transition: all 0.1s;
+  }
+  .cat-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
 </style>
 </head>
 <body>
@@ -225,15 +260,52 @@
     <div class="upload-sub">.xlsx / .xls / .csv 지원</div>
   </div>
 
-  <!-- 파일 로드 후 영역 -->
-  <div id="mainContent" style="display:none">
-
+  <!-- 모드 선택 (파일 업로드 후) -->
+  <div id="modeSelect" style="display:none">
     <div class="file-label">
       <span id="fileNameLabel"></span>
       <button onclick="resetFile()">다른 파일 열기</button>
     </div>
-
     <div class="sheet-tabs" id="sheetTabs"></div>
+    <div class="mode-wrap">
+      <button class="mode-btn mode-btn-make" onclick="enterMode('make')">
+        <div class="mode-icon">🔨</div>
+        <div class="mode-title">제작</div>
+        <div class="mode-sub">상품별로 분류해서 읽기</div>
+      </button>
+      <button class="mode-btn mode-btn-check" onclick="enterMode('check')">
+        <div class="mode-icon">✅</div>
+        <div class="mode-title">검수</div>
+        <div class="mode-sub">전체 주문 순서대로 읽기</div>
+      </button>
+    </div>
+  </div>
+
+  <!-- 활성 콘텐츠 (제작 / 검수 공통 영역) -->
+  <div id="activeContent" style="display:none">
+
+    <!-- 제작 전용 헤더 -->
+    <div id="makeHeader" style="display:none">
+      <div class="top-bar">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <div class="batch-badges" id="makeBatchBadges"></div>
+      </div>
+      <div class="cat-tabs" id="catTabs">
+        <button class="cat-tab active" data-cat="all"     onclick="setCat('all')">전체</button>
+        <button class="cat-tab"        data-cat="plate"   onclick="setCat('plate')">주차번호판</button>
+        <button class="cat-tab"        data-cat="keyring" onclick="setCat('keyring')">키링</button>
+        <button class="cat-tab"        data-cat="set"     onclick="setCat('set')">세트</button>
+        <button class="cat-tab"        data-cat="other"   onclick="setCat('other')">기타</button>
+      </div>
+    </div>
+
+    <!-- 검수 전용 헤더 -->
+    <div id="checkHeader" style="display:none">
+      <div class="top-bar">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <span style="font-size:15px; font-weight:600; color:var(--text)">전체 주문 검수</span>
+      </div>
+    </div>
 
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--green-mid)"></div> 2개 이상 주문</div>
@@ -285,29 +357,34 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle';
+let currentMode = null, currentCat = 'all';
 
 // ═══════════════════════════════════════════════
 //  DOM
 // ═══════════════════════════════════════════════
 const $ = id => document.getElementById(id);
-const uploadZone    = $('uploadZone');
-const fileInput     = $('fileInput');
-const mainContent   = $('mainContent');
-const sheetTabs     = $('sheetTabs');
-const dataTable     = $('dataTable');
-const playBtn       = $('playBtn');
-const pauseBtn      = $('pauseBtn');
-const stopBtn       = $('stopBtn');
-const statusDot     = $('statusDot');
-const statusText    = $('statusText');
-const voiceSelect   = $('voiceSelect');
-const rateRange     = $('rateRange');
-const pitchRange    = $('pitchRange');
-const rateVal       = $('rateVal');
-const pitchVal      = $('pitchVal');
-const fileNameLabel = $('fileNameLabel');
-const headerSub     = $('headerSub');
-const preview       = $('preview');
+const uploadZone      = $('uploadZone');
+const fileInput       = $('fileInput');
+const modeSelectEl    = $('modeSelect');
+const activeContent   = $('activeContent');
+const makeHeader      = $('makeHeader');
+const checkHeader     = $('checkHeader');
+const makeBatchBadges = $('makeBatchBadges');
+const sheetTabs       = $('sheetTabs');
+const dataTable       = $('dataTable');
+const playBtn         = $('playBtn');
+const pauseBtn        = $('pauseBtn');
+const stopBtn         = $('stopBtn');
+const statusDot       = $('statusDot');
+const statusText      = $('statusText');
+const voiceSelect     = $('voiceSelect');
+const rateRange       = $('rateRange');
+const pitchRange      = $('pitchRange');
+const rateVal         = $('rateVal');
+const pitchVal        = $('pitchVal');
+const fileNameLabel   = $('fileNameLabel');
+const headerSub       = $('headerSub');
+const preview         = $('preview');
 
 // ═══════════════════════════════════════════════
 //  이벤트
@@ -328,6 +405,74 @@ const NATIVE = ['','한','두','세','네','다섯','여섯','일곱','여덟','
 const DIGIT  = ['공','일','이','삼','사','오','육','칠','팔','구'];
 
 function sinoNum(n) { const i = parseInt(n); return (i > 0 && i < SINO.length) ? SINO[i] : String(i); }
+
+// ═══════════════════════════════════════════════
+//  상품 타입 감지
+//  - 주차번호판: 가죽컬러에 "/" 포함 (예: "블랙/알칸타라")
+//  - 키링: 가죽컬러 단일 색상 + 숫자 4자리
+//  - 기타: 그 외 모든 상품
+// ═══════════════════════════════════════════════
+function detectProductType(leatherColor, num) {
+  if (!leatherColor) return 'other';
+  if (leatherColor.includes('/')) return 'plate';
+  if (num && /^\d{4}$/.test(num.trim())) return 'keyring';
+  return 'other';
+}
+
+// ═══════════════════════════════════════════════
+//  차수 감지 (송장 열)
+//  - "2차", "3차" 등 → 해당 차수 추가 주문임을 표시
+// ═══════════════════════════════════════════════
+function detectBatch(invoiceText) {
+  if (!invoiceText) return null;
+  const m = invoiceText.match(/(\d+차)/);
+  return m ? m[1] : null;
+}
+
+// ═══════════════════════════════════════════════
+//  한 사람의 복수 주문 관계 분석
+//  multiType 종류:
+//  'single'           : 단독 주문
+//  'set'              : 주차번호판 + 키링 조합 (세트)
+//  'same_option'      : 동일 상품 + 동일 옵션 중복 주문
+//  'same_product_diff': 동일 상품 + 다른 옵션 주문
+//  'multi_diff'       : 서로 다른 상품 복합 주문
+// ═══════════════════════════════════════════════
+function analyzePersonOrders(personOrders) {
+  if (personOrders.length === 1) return;
+
+  const plates   = personOrders.filter(o => o.productType === 'plate');
+  const keyrings = personOrders.filter(o => o.productType === 'keyring');
+  const others   = personOrders.filter(o => o.productType === 'other');
+
+  // 세트: 주차번호판 1개 + 키링 1개만 있는 경우
+  if (plates.length === 1 && keyrings.length === 1 && others.length === 0) {
+    personOrders.forEach(o => { o.multiType = 'set'; o.groupLabel = '세트'; });
+    return;
+  }
+
+  const allSameType = personOrders.every(o => o.productType === personOrders[0].productType);
+  const allSameOpt  = personOrders.every(o =>
+    o.leatherColor === personOrders[0].leatherColor &&
+    o.numColor     === personOrders[0].numColor &&
+    o.num          === personOrders[0].num
+  );
+
+  // 동일 상품 + 동일 옵션 중복
+  if (allSameType && allSameOpt) {
+    personOrders.forEach(o => { o.multiType = 'same_option'; o.groupLabel = '동일색상 동일번호'; });
+    return;
+  }
+
+  // 동일 상품 + 다른 옵션
+  if (allSameType) {
+    personOrders.forEach(o => { o.multiType = 'same_product_diff'; o.groupLabel = ''; });
+    return;
+  }
+
+  // 각기 다른 상품 복합 주문
+  personOrders.forEach(o => { o.multiType = 'multi_diff'; o.groupLabel = ''; });
+}
 
 function convertNumField(s) {
   // 수량 (1개 → 한개)
@@ -357,28 +502,55 @@ function parseOrders(rows) {
   }
   if (hi === -1) return [];
 
-  const C_NO   = colMap['번호']   ?? 1;
-  const C_NAME = colMap['수령인'] ?? 2;
-  const C_NUM  = colMap['숫자']   ?? 5;
-  const C_NOTE = colMap['비고']   ?? 8;
-  const headers = rows[hi].map(str);
+  const C_NO      = colMap['번호']     ?? 1;
+  const C_NAME    = colMap['수령인']   ?? 2;
+  const C_NUM     = colMap['숫자']     ?? 5;
+  const C_NOTE    = colMap['비고']     ?? 8;
+  const C_LEATHER = colMap['가죽컬러'] ?? -1;
+  const C_NUMCOL  = colMap['숫자컬러'] ?? -1;
+  const C_INV     = colMap['송장']     ?? -1;
+  const headers   = rows[hi].map(str);
   const orders = []; let last = null;
 
   for (let i = hi + 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.every(c => c == null || str(c) === '')) continue;
-    const no = str(row[C_NO]), name = str(row[C_NAME]);
-    const num = str(row[C_NUM]), note = str(row[C_NOTE]);
+    const no   = str(row[C_NO]);
+    const name = str(row[C_NAME]);
+    const num  = str(row[C_NUM]);
+    const note = str(row[C_NOTE]);
+    const leatherColor = C_LEATHER >= 0 ? str(row[C_LEATHER]) : '';
+    const numColor     = C_NUMCOL  >= 0 ? str(row[C_NUMCOL])  : '';
+    const invoice      = C_INV     >= 0 ? str(row[C_INV])     : '';
 
     if (!no && !name && row.some(c => str(c) !== '')) { if (last) last.count++; continue; }
     if (!name) continue;
 
-    const skip = !num || note.includes('확인중');
-    const o = { no, name, num, note, row, headers, count: 1, skip,
-      skipReason: skip ? (note.includes('확인중') ? '확인중' : '숫자없음') : '' };
+    const skip        = !num || note.includes('확인중');
+    const productType = detectProductType(leatherColor, num);
+    const batch       = detectBatch(invoice);
+
+    const o = {
+      no, name, num, note, row, headers, count: 1, skip,
+      skipReason: skip ? (note.includes('확인중') ? '확인중' : '숫자없음') : '',
+      leatherColor, numColor, invoice, productType, batch,
+      multiType: 'single', groupLabel: ''
+    };
     orders.push(o);
     last = skip ? null : o;
   }
+
+  // 사람별 그룹화 후 주문 관계 분석
+  const personMap = new Map();
+  orders.forEach(o => {
+    if (!personMap.has(o.name)) personMap.set(o.name, []);
+    personMap.get(o.name).push(o);
+  });
+  personMap.forEach(personOrders => {
+    const valid = personOrders.filter(o => !o.skip);
+    if (valid.length > 1) analyzePersonOrders(valid);
+  });
+
   return orders;
 }
 
@@ -395,22 +567,24 @@ function loadFile(file) {
       rawSheets[name] = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: null });
       groupedOrders[name] = parseOrders(rawSheets[name]);
     });
+    currentSheet = workbook.SheetNames[0];
     fileNameLabel.textContent = '📄 ' + file.name;
     headerSub.textContent = file.name;
-    mainContent.style.display = 'block';
     uploadZone.style.display = 'none';
+    modeSelectEl.style.display = 'block';
     renderSheetTabs();
-    loadSheet(workbook.SheetNames[0]);
     loadVoices();
-    setUIState('idle');
   };
   reader.readAsArrayBuffer(file);
 }
 
 function resetFile() {
   doStop();
-  mainContent.style.display = 'none';
-  uploadZone.style.display = 'block';
+  currentMode = null;
+  currentCat  = 'all';
+  activeContent.style.display  = 'none';
+  modeSelectEl.style.display   = 'none';
+  uploadZone.style.display     = 'block';
   headerSub.textContent = '파일을 불러오세요';
   fileInput.value = '';
 }
@@ -429,12 +603,65 @@ function renderSheetTabs() {
   });
 }
 
+// ═══════════════════════════════════════════════
+//  모드 전환
+// ═══════════════════════════════════════════════
+function enterMode(mode) {
+  currentMode = mode;
+  currentCat  = 'all';
+  modeSelectEl.style.display  = 'none';
+  activeContent.style.display = 'block';
+  makeHeader.style.display    = mode === 'make'  ? 'block' : 'none';
+  checkHeader.style.display   = mode === 'check' ? 'block' : 'none';
+  headerSub.textContent       = mode === 'make'  ? '제작' : '검수';
+  if (mode === 'make') renderBatchBadges();
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
+function goBack() {
+  doStop();
+  currentMode = null;
+  currentCat  = 'all';
+  activeContent.style.display = 'none';
+  modeSelectEl.style.display  = 'block';
+  headerSub.textContent       = fileNameLabel.textContent.replace('📄 ', '');
+}
+
+function setCat(cat) {
+  currentCat = cat;
+  document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === cat));
+  doStop();
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
+function renderBatchBadges() {
+  const orders = groupedOrders[currentSheet] || [];
+  const batches = [...new Set(orders.map(o => o.batch).filter(Boolean))];
+  makeBatchBadges.innerHTML = batches.length
+    ? batches.map(b => `<span class="badge badge-batch">${b} 추가주문 포함</span>`).join('')
+    : '<span class="badge badge-other">1차 주문</span>';
+}
+
 function loadSheet(name) {
   currentSheet = name;
   document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.textContent === name));
-  const orders = groupedOrders[name] || [];
+  let orders = groupedOrders[name] || [];
+
+  // 제작 모드: 카테고리 필터 적용
+  if (currentMode === 'make' && currentCat !== 'all') {
+    orders = currentCat === 'set'
+      ? orders.filter(o => o.multiType === 'set')
+      : orders.filter(o => o.productType === currentCat);
+  }
+
   dataTable.innerHTML = '';
-  if (!orders.length) return;
+  if (!orders.length) {
+    dataTable.innerHTML = '<tbody><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text2)">해당 카테고리의 주문이 없습니다</td></tr></tbody>';
+    return;
+  }
 
   const thead = document.createElement('thead');
   thead.innerHTML = '<tr><th>번호</th><th>수령인</th><th>가죽컬러</th><th>숫자컬러</th><th>숫자</th><th>비고</th><th>상태</th></tr>';
@@ -446,11 +673,18 @@ function loadSheet(name) {
     tr.dataset.orderIdx = idx;
     if (o.skip) tr.classList.add('row-skip');
     else if (o.count > 1) tr.classList.add('row-multi');
-    const gc = key => { const ci = o.headers.indexOf(key); return ci >= 0 ? str(o.row[ci]) : ''; };
-    const badge = o.skip
-      ? `<span class="badge badge-skip">${o.skipReason}</span>`
-      : o.count > 1 ? `<span class="badge badge-multi">${o.count}개 주문</span>` : '';
-    tr.innerHTML = `<td>${o.no}</td><td>${o.name}</td><td>${gc('가죽컬러')}</td><td>${gc('숫자컬러')}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
+    let badge = '';
+    if (o.skip) {
+      badge = `<span class="badge badge-skip">${o.skipReason}</span>`;
+    } else {
+      const ptLabel = { plate: '주차번호판', keyring: '키링', other: '기타' }[o.productType] || '';
+      const ptClass = { plate: 'badge-plate', keyring: 'badge-keyring', other: 'badge-other' }[o.productType] || '';
+      if (ptLabel) badge += `<span class="badge ${ptClass}">${ptLabel}</span> `;
+      if (o.groupLabel) badge += `<span class="badge badge-multi">${o.groupLabel}</span> `;
+      else if (o.count > 1) badge += `<span class="badge badge-multi">${o.count}개 묶음</span> `;
+      if (o.batch) badge += `<span class="badge badge-batch">${o.batch}</span>`;
+    }
+    tr.innerHTML = `<td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
     tbody.appendChild(tr);
   });
   dataTable.appendChild(tbody);
@@ -460,18 +694,25 @@ function loadSheet(name) {
 //  TTS 텍스트 빌드
 // ═══════════════════════════════════════════════
 function buildTexts() {
-  return (groupedOrders[currentSheet] || [])
+  let orders = groupedOrders[currentSheet] || [];
+
+  if (currentMode === 'make' && currentCat !== 'all') {
+    orders = currentCat === 'set'
+      ? orders.filter(o => o.multiType === 'set')
+      : orders.filter(o => o.productType === currentCat);
+  }
+
+  return orders
     .map((o, idx) => ({ o, idx }))
     .filter(({ o }) => !o.skip)
     .map(({ o, idx }) => {
-      const gc = key => { const ci = o.headers.indexOf(key); return ci >= 0 ? str(o.row[ci]) : ''; };
-      const leather = gc('가죽컬러'), numColor = gc('숫자컬러');
       let t = `${sinoNum(o.no)}번, ${o.name}`;
-      if (o.count > 1) t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
-      if (leather)  t += `, ${leather}`;
-      if (numColor) t += `, 숫자색 ${numColor}`;
-      if (o.num)    t += `, 번호 ${convertNumField(o.num)}`;
-      if (o.note)   t += `, ${o.note}`;
+      if (o.groupLabel)       t += `, ${o.groupLabel}`;
+      if (o.count > 1)        t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
+      if (o.leatherColor)     t += `, ${o.leatherColor}`;
+      if (o.numColor)         t += `, 숫자색 ${o.numColor}`;
+      if (o.num)              t += `, 번호 ${convertNumField(o.num)}`;
+      if (o.note)             t += `, ${o.note}`;
       return { text: t, orderIdx: idx };
     });
 }
