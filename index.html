@@ -328,7 +328,8 @@
         <button class="read-mode-btn active" data-mode="leather"   onclick="setReadMode('leather')">가죽</button>
         <button class="read-mode-btn"        data-mode="numColor" onclick="setReadMode('numColor')">숫자색상</button>
         <button class="read-mode-btn"        data-mode="num"      onclick="setReadMode('num')">번호</button>
-        <button class="read-mode-btn"        data-mode="numPlate" onclick="setReadMode('numPlate')">플레이트</button>
+        <button class="read-mode-btn"        data-mode="plate1"   onclick="setReadMode('plate1')">플레이트 1</button>
+        <button class="read-mode-btn"        data-mode="plate2"   onclick="setReadMode('plate2')">플레이트 2</button>
       </div>
     </div>
 
@@ -916,13 +917,17 @@ function buildTexts() {
         if (leather)    parts.push(leather);
         if (o.numColor) parts.push(o.numColor);
         result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
-      } else if (makeReadMode === 'numPlate') {
+      } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
-        const colorPart = o.leatherColor.split('/')[0].trim(); // "/" 앞 색상 (블랙, 화이트 등)
+        const colorPart = o.leatherColor.split('/')[0].trim();
+        result.push({ text: colorPart ? `${colorPart} 플레이트` : '(정보 없음)', orderIdx: idx, postDelay: 956 });
+      } else if (makeReadMode === 'plate2') {
+        if (o.productType !== 'plate') return; // 주차번호판만 읽기
+        const colorPart = o.leatherColor.split('/')[0].trim();
         const firstParts = [];
         if (o.groupLabel) firstParts.push(o.groupLabel);
-        if (leather)      firstParts.push(leather);    // 가죽종류 (알칸타라, 크림 등)
-        if (o.numColor)   firstParts.push(o.numColor); // 숫자색상
+        if (leather)      firstParts.push(leather);
+        if (o.numColor)   firstParts.push(o.numColor);
         if (firstParts.length) result.push({ text: firstParts.join(', '), orderIdx: idx, postDelay: 300 });
         const digits = (o.num || '').replace(/\D/g, '').slice(-4).split('').filter(Boolean);
         digits.forEach((d, i) => {
@@ -930,7 +935,7 @@ function buildTexts() {
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
             postDelay: i < digits.length - 1 ? 900 : (colorPart ? 300 : 956),
-            numRate: true
+            numRate2: true   // 현재 numRate보다 40% 느림 (baseRate * 0.48)
           });
         });
         if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 956 });
@@ -955,7 +960,7 @@ function buildTexts() {
     });
 
     // 기타 상품: 묶어서 건수 읽기 (플레이트 모드 제외)
-    if (others.length && makeReadMode !== 'numPlate') {
+    if (others.length && makeReadMode !== 'plate1' && makeReadMode !== 'plate2') {
       if (makeReadMode === 'leather') {
         const groups = new Map();
         others.forEach(({ o, idx }) => {
@@ -1127,7 +1132,7 @@ function speakAt(idx) {
     statusText.textContent = '✅ 읽기 완료';
     return;
   }
-  const { text, orderIdx, postDelay = 350, numRate = false } = utterances[idx];
+  const { text, orderIdx, postDelay = 350, numRate = false, numRate2 = false } = utterances[idx];
   currentIdx = idx;
   highlightRow(orderIdx);
   statusText.textContent = `${idx + 1} / ${utterances.length}건 읽는 중...`;
@@ -1138,7 +1143,7 @@ function speakAt(idx) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang  = 'ko-KR';
   const baseRate = parseFloat(rateRange.value);
-  u.rate  = numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
+  u.rate  = numRate2 ? parseFloat((baseRate * 0.48).toFixed(2)) : numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
   u.pitch = parseFloat(pitchRange.value);
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
