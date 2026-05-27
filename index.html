@@ -1130,7 +1130,7 @@ function buildTexts() {
     });
   }
 
-  // 검수 모드: 플레이트색상 → 가죽종류 → 숫자색상 → 숫자
+  // 검수 모드: 플레이트색상 → 가죽종류 → 숫자색상 → 숫자(전체)
   return validPairs.map(({ o, idx }) => {
     const parts = [];
     if (o.productType === 'plate') {
@@ -1139,12 +1139,12 @@ function buildTexts() {
       if (colorPart)   parts.push(`${colorPart} 플레이트`);
       if (leatherPart) parts.push(leatherPart);
       if (o.numColor)  parts.push(o.numColor);
-      const d = (o.num || '').replace(/\D/g, '').slice(-4);
+      const d = (o.num || '').replace(/\D/g, '');
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else if (o.productType === 'keyring') {
       if (o.leatherColor) parts.push(o.leatherColor);
       if (o.numColor)     parts.push(o.numColor);
-      const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
+      const d = (o.num || '').replace(/\D/g, '');
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else {
       if (o.leatherColor) parts.push(o.leatherColor);
