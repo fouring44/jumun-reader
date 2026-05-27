@@ -1012,7 +1012,7 @@ function buildTexts() {
       if (o.multiType === 'set') {
         parts.push('세트');
       } else {
-        const cnt = ppCount[`${o.name}|${o.productType}`] || 1;
+        const cnt = Math.max(ppCount[`${o.name}|${o.productType}`] || 1, o.count || 1);
         if (cnt > 1) parts.push(`${cnt}개 구매`);
       }
       const lbl = getProductLabel(o);
@@ -1071,7 +1071,7 @@ function buildTexts() {
     if (o.multiType === 'set') {
       parts.push('세트');
     } else {
-      const cnt = personProductCount[`${o.name}|${o.productType}`] || 1;
+      const cnt = Math.max(personProductCount[`${o.name}|${o.productType}`] || 1, o.count || 1);
       if (cnt > 1) parts.push(`${cnt}개 구매`);
     }
     const prodLabel = getProductLabel(o);
