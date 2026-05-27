@@ -863,6 +863,17 @@ function loadSheet(name) {
 }
 
 // ═══════════════════════════════════════════════
+//  제품 종류 레이블
+// ═══════════════════════════════════════════════
+function getProductLabel(o) {
+  if (o.productType === 'plate')   return '주차번호판';
+  if (o.productType === 'keyring') return '키링';
+  if (o.leatherColor.toLowerCase().includes('vent')) return '벤트 방향제';
+  if (o.leatherColor.includes('비상탈출')) return '비상탈출';
+  return o.leatherColor || '기타';
+}
+
+// ═══════════════════════════════════════════════
 //  TTS 텍스트 빌드
 // ═══════════════════════════════════════════════
 function buildTexts() {
@@ -988,15 +999,35 @@ function buildTexts() {
     const others   = validPairs.filter(({ o }) => o.productType === 'other');
     const result   = [];
 
+    const ppCount = {};
+    nonOther.forEach(({ o }) => {
+      if (o.multiType !== 'set') {
+        const k = `${o.name}|${o.productType}`;
+        ppCount[k] = (ppCount[k] || 0) + 1;
+      }
+    });
+    let prevLbl = null;
     nonOther.forEach(({ o, idx }) => {
-      let t = `${sinoNum(o.no)}번, ${o.name}`;
-      if (o.groupLabel)   t += `, ${o.groupLabel}`;
-      if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
-      if (o.leatherColor) t += `, ${o.leatherColor}`;
-      if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
-      if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
-      if (o.note)         t += `, ${o.note}`;
-      result.push({ text: t, orderIdx: idx, postDelay: 455 });
+      const parts = [o.name];
+      if (o.multiType === 'set') {
+        parts.push('세트');
+      } else {
+        const cnt = ppCount[`${o.name}|${o.productType}`] || 1;
+        if (cnt > 1) parts.push(`${cnt}개 구매`);
+      }
+      const lbl = getProductLabel(o);
+      if (lbl !== prevLbl) parts.push(lbl);
+      prevLbl = lbl;
+      if (o.productType === 'plate') {
+        const d = (o.num || '').replace(/\D/g, '').slice(-4);
+        if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+      } else if (o.productType === 'keyring') {
+        const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
+        if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+      } else {
+        if (o.num) parts.push(o.num);
+      }
+      result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 455 });
     });
 
     if (others.length) {
@@ -1026,16 +1057,36 @@ function buildTexts() {
     return result;
   }
 
-  // 검수 모드: 모든 내용 읽음
-  return validPairs.flatMap(({ o, idx }) => {
-    let t = `${sinoNum(o.no)}번, ${o.name}`;
-    if (o.groupLabel)   t += `, ${o.groupLabel}`;
-    if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
-    if (o.leatherColor) t += `, ${o.leatherColor}`;
-    if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
-    if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
-    if (o.note)         t += `, ${o.note}`;
-    return [{ text: t, orderIdx: idx }];
+  // 검수 모드: 이름 → 세트/구매수 → 제품종류(변경시만) → 번호
+  const personProductCount = {};
+  validPairs.forEach(({ o }) => {
+    if (o.multiType !== 'set') {
+      const k = `${o.name}|${o.productType}`;
+      personProductCount[k] = (personProductCount[k] || 0) + 1;
+    }
+  });
+  let prevProductLabel = null;
+  return validPairs.map(({ o, idx }) => {
+    const parts = [o.name];
+    if (o.multiType === 'set') {
+      parts.push('세트');
+    } else {
+      const cnt = personProductCount[`${o.name}|${o.productType}`] || 1;
+      if (cnt > 1) parts.push(`${cnt}개 구매`);
+    }
+    const prodLabel = getProductLabel(o);
+    if (prodLabel !== prevProductLabel) parts.push(prodLabel);
+    prevProductLabel = prodLabel;
+    if (o.productType === 'plate') {
+      const d = (o.num || '').replace(/\D/g, '').slice(-4);
+      if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+    } else if (o.productType === 'keyring') {
+      const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
+      if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+    } else {
+      if (o.num) parts.push(o.num);
+    }
+    return { text: parts.join(', '), orderIdx: idx, postDelay: 455 };
   });
 }
 
