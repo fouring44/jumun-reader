@@ -348,6 +348,14 @@
         <span style="font-size:15px; font-weight:600; color:var(--text)">검수</span>
       </div>
       <div class="cat-tabs" id="checkBatchTabs"></div>
+      <div class="cat-tabs" id="checkCatTabs">
+        <button class="cat-tab active" data-ccat="all"     onclick="setCheckCat('all')">전체</button>
+        <button class="cat-tab"        data-ccat="plate"   onclick="setCheckCat('plate')">주차번호판</button>
+        <button class="cat-tab"        data-ccat="keyring" onclick="setCheckCat('keyring')">키링</button>
+        <button class="cat-tab"        data-ccat="set"     onclick="setCheckCat('set')">세트</button>
+        <button class="cat-tab"        data-ccat="escape"  onclick="setCheckCat('escape')">비상탈출</button>
+        <button class="cat-tab"        data-ccat="vent"    onclick="setCheckCat('vent')">벤트 방향제</button>
+      </div>
     </div>
 
     <!-- 포장 전용 헤더 -->
@@ -417,7 +425,7 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle', selectedOrderIdx = null;
-let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all';
+let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all', checkCat = 'all';
 
 // ═══════════════════════════════════════════════
 //  DOM
@@ -724,11 +732,14 @@ function enterMode(mode) {
   packHeader.style.display    = mode === 'pack'  ? 'block' : 'none';
   headerSub.textContent       = { make: '제작', check: '검수', pack: '포장' }[mode] || mode;
   if (mode === 'make')  renderBatchBadges();
-  if (mode === 'check') renderCheckBatchTabs();
+  if (mode === 'check') { checkCat = 'all'; renderCheckBatchTabs(); }
   if (mode === 'pack')  { packCat = 'all'; renderPackBatchTabs(); }
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
   document.querySelectorAll('#packCatTabs .cat-tab').forEach(t =>
     t.classList.toggle('active', t.dataset.pcat === 'all')
+  );
+  document.querySelectorAll('#checkCatTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.ccat === 'all')
   );
   loadSheet(currentSheet);
   setUIState('idle');
@@ -741,6 +752,7 @@ function goBack() {
   currentBatch  = 'all';
   makeReadMode  = 'leather';
   packCat       = 'all';
+  checkCat      = 'all';
   activeContent.style.display = 'none';
   modeSelectEl.style.display  = 'block';
   headerSub.textContent       = fileNameLabel.textContent.replace('📄 ', '');
@@ -783,6 +795,16 @@ function setReadMode(mode) {
     b.classList.toggle('active', b.dataset.mode === mode)
   );
   doStop();
+  setUIState('idle');
+}
+
+function setCheckCat(cat) {
+  checkCat = cat;
+  document.querySelectorAll('#checkCatTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.ccat === cat)
+  );
+  doStop();
+  loadSheet(currentSheet);
   setUIState('idle');
 }
 
@@ -858,6 +880,10 @@ function loadSheet(name) {
   if (currentMode === 'pack' && packCat !== 'all') {
     orders = filterByPackCat(orders, packCat);
   }
+  // 검수 모드: 제품 종류 필터 적용
+  if (currentMode === 'check' && checkCat !== 'all') {
+    orders = filterByPackCat(orders, checkCat);
+  }
 
   dataTable.innerHTML = '';
   selectedOrderIdx = null;
@@ -928,6 +954,9 @@ function buildTexts() {
   }
   if (currentMode === 'pack' && packCat !== 'all') {
     orders = filterByPackCat(orders, packCat);
+  }
+  if (currentMode === 'check' && checkCat !== 'all') {
+    orders = filterByPackCat(orders, checkCat);
   }
 
   const validPairs = orders.map((o, idx) => ({ o, idx })).filter(({ o }) => !o.skip);
@@ -1101,36 +1130,28 @@ function buildTexts() {
     });
   }
 
-  // 검수 모드: 이름 → 세트/구매수 → 제품종류(변경시만) → 번호
-  const personProductCount = {};
-  validPairs.forEach(({ o }) => {
-    if (o.multiType !== 'set') {
-      const k = `${o.name}|${o.productType}`;
-      personProductCount[k] = (personProductCount[k] || 0) + 1;
-    }
-  });
-  let prevProductLabel = null;
+  // 검수 모드: 플레이트색상 → 가죽종류 → 숫자색상 → 숫자
   return validPairs.map(({ o, idx }) => {
-    const parts = [o.name];
-    if (o.multiType === 'set') {
-      parts.push('세트');
-    } else {
-      const cnt = Math.max(personProductCount[`${o.name}|${o.productType}`] || 1, o.count || 1);
-      if (cnt > 1) parts.push(`${cnt}개 구매`);
-    }
-    const prodLabel = getProductLabel(o);
-    if (prodLabel !== prevProductLabel) parts.push(prodLabel);
-    prevProductLabel = prodLabel;
+    const parts = [];
     if (o.productType === 'plate') {
+      const colorPart   = (o.leatherColor.split('/')[0] || '').trim();
+      const leatherPart = (o.leatherColor.split('/')[1] || '').trim();
+      if (colorPart)   parts.push(`${colorPart} 플레이트`);
+      if (leatherPart) parts.push(leatherPart);
+      if (o.numColor)  parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '').slice(-4);
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else if (o.productType === 'keyring') {
+      if (o.leatherColor) parts.push(o.leatherColor);
+      if (o.numColor)     parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else {
-      if (o.num) parts.push(o.num);
+      if (o.leatherColor) parts.push(o.leatherColor);
+      if (o.numColor)     parts.push(o.numColor);
+      if (o.num)          parts.push(o.num);
     }
-    return { text: parts.join(', '), orderIdx: idx, postDelay: 956 };
+    return { text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 };
   });
 }
 
