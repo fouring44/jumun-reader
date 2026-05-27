@@ -248,6 +248,19 @@
     cursor: pointer; white-space: nowrap; transition: all 0.1s;
   }
   .cat-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  /* ── 읽기 단계 버튼 (제작 전용) ── */
+  .read-mode-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .read-mode-btn {
+    flex: 1; font-size: 15px; font-weight: 700;
+    padding: 11px 0; border-radius: var(--radius-sm);
+    border: 0.5px solid var(--border2);
+    background: var(--bg2); color: var(--text2);
+    cursor: pointer; transition: all 0.1s; -webkit-user-select: none;
+    text-align: center;
+  }
+  .read-mode-btn:active { transform: scale(0.96); opacity: 0.85; }
+  .read-mode-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
 </style>
 </head>
 <body>
@@ -303,6 +316,11 @@
         <button class="cat-tab"        data-cat="keyring" onclick="setCat('keyring')">키링</button>
         <button class="cat-tab"        data-cat="set"     onclick="setCat('set')">세트</button>
         <button class="cat-tab"        data-cat="other"   onclick="setCat('other')">기타</button>
+      </div>
+      <div class="read-mode-tabs">
+        <button class="read-mode-btn active" data-mode="leather" onclick="setReadMode('leather')">가죽</button>
+        <button class="read-mode-btn"        data-mode="numColor" onclick="setReadMode('numColor')">숫자</button>
+        <button class="read-mode-btn"        data-mode="num"     onclick="setReadMode('num')">번호</button>
       </div>
     </div>
 
@@ -365,7 +383,7 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle';
-let currentMode = null, currentCat = 'all', currentBatch = 'all';
+let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather';
 
 // ═══════════════════════════════════════════════
 //  DOM
@@ -629,9 +647,10 @@ function renderSheetTabs() {
 //  모드 전환
 // ═══════════════════════════════════════════════
 function enterMode(mode) {
-  currentMode  = mode;
-  currentCat   = 'all';
-  currentBatch = 'all';
+  currentMode   = mode;
+  currentCat    = 'all';
+  currentBatch  = 'all';
+  makeReadMode  = 'leather';
   modeSelectEl.style.display  = 'none';
   activeContent.style.display = 'block';
   makeHeader.style.display    = mode === 'make'  ? 'block' : 'none';
@@ -646,9 +665,10 @@ function enterMode(mode) {
 
 function goBack() {
   doStop();
-  currentMode  = null;
-  currentCat   = 'all';
-  currentBatch = 'all';
+  currentMode   = null;
+  currentCat    = 'all';
+  currentBatch  = 'all';
+  makeReadMode  = 'leather';
   activeContent.style.display = 'none';
   modeSelectEl.style.display  = 'block';
   headerSub.textContent       = fileNameLabel.textContent.replace('📄 ', '');
@@ -683,6 +703,15 @@ function renderCheckBatchTabs() {
     ...batches.map(b =>
       `<button class="cat-tab" data-batch="${b}" onclick="setCheckBatch('${b}')">${b}</button>`)
   ].join('');
+}
+
+function setReadMode(mode) {
+  makeReadMode = mode;
+  document.querySelectorAll('.read-mode-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === mode)
+  );
+  doStop();
+  setUIState('idle');
 }
 
 function setCheckBatch(batch) {
@@ -766,13 +795,35 @@ function buildTexts() {
     .map((o, idx) => ({ o, idx }))
     .filter(({ o }) => !o.skip)
     .map(({ o, idx }) => {
-      let t = `${sinoNum(o.no)}번, ${o.name}`;
-      if (o.groupLabel)       t += `, ${o.groupLabel}`;
-      if (o.count > 1)        t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
-      if (o.leatherColor)     t += `, ${o.leatherColor}`;
-      if (o.numColor)         t += `, 숫자색 ${o.numColor}`;
-      if (o.num)              t += `, 번호 ${convertNumField(o.num)}`;
-      if (o.note)             t += `, ${o.note}`;
+      let t;
+      if (currentMode === 'make') {
+        // 제작 모드: 가죽컬러는 "/" 뒤 소재만 읽음
+        const leather = o.leatherColor.includes('/')
+          ? o.leatherColor.split('/')[1].trim()
+          : o.leatherColor;
+        const parts = [];
+        if (o.groupLabel) parts.push(o.groupLabel);
+        if (makeReadMode === 'leather') {
+          if (leather) parts.push(leather);
+        } else if (makeReadMode === 'numColor') {
+          if (leather)    parts.push(leather);
+          if (o.numColor) parts.push(o.numColor);
+        } else {
+          if (leather)    parts.push(leather);
+          if (o.numColor) parts.push(o.numColor);
+          if (o.num)      parts.push(convertNumField(o.num));
+        }
+        t = parts.join(', ') || '(정보 없음)';
+      } else {
+        // 검수 모드: 모든 내용 읽음
+        t = `${sinoNum(o.no)}번, ${o.name}`;
+        if (o.groupLabel)   t += `, ${o.groupLabel}`;
+        if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
+        if (o.leatherColor) t += `, ${o.leatherColor}`;
+        if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
+        if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
+        if (o.note)         t += `, ${o.note}`;
+      }
       return { text: t, orderIdx: idx };
     });
 }
