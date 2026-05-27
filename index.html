@@ -929,11 +929,11 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 1500 : (colorPart ? 300 : 956),
+            postDelay: i < digits.length - 1 ? 900 : (colorPart ? 300 : 956),
             numRate: true
           });
         });
-        if (colorPart) result.push({ text: colorPart, orderIdx: idx, postDelay: 956 });
+        if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 956 });
         if (!firstParts.length && !digits.length) result.push({ text: '(정보 없음)', orderIdx: idx });
       } else {
         // 번호 모드: 낱자 읽기
