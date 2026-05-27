@@ -230,6 +230,7 @@
   .mode-btn:active { transform: scale(0.97); opacity: 0.85; }
   .mode-btn-make  { background: var(--blue); color: #fff; }
   .mode-btn-check { background: var(--green); color: #fff; }
+  .mode-btn-pack  { background: var(--amber); color: #fff; }
   .mode-icon  { font-size: 36px; }
   .mode-title { font-size: 22px; font-weight: 700; }
   .mode-sub   { font-size: 13px; opacity: 0.78; }
@@ -299,6 +300,11 @@
         <div class="mode-title">검수</div>
         <div class="mode-sub">전체 주문 순서대로 읽기</div>
       </button>
+      <button class="mode-btn mode-btn-pack" onclick="enterMode('pack')">
+        <div class="mode-icon">📦</div>
+        <div class="mode-title">포장</div>
+        <div class="mode-sub">포장 주문 읽기</div>
+      </button>
     </div>
   </div>
 
@@ -332,6 +338,15 @@
         <span style="font-size:15px; font-weight:600; color:var(--text)">검수</span>
       </div>
       <div class="cat-tabs" id="checkBatchTabs"></div>
+    </div>
+
+    <!-- 포장 전용 헤더 -->
+    <div id="packHeader" style="display:none">
+      <div class="top-bar">
+        <button class="back-btn" onclick="goBack()">← 뒤로</button>
+        <span style="font-size:15px; font-weight:600; color:var(--text)">포장</span>
+      </div>
+      <div class="cat-tabs" id="packBatchTabs"></div>
     </div>
 
     <div class="legend">
@@ -396,6 +411,7 @@ const modeSelectEl    = $('modeSelect');
 const activeContent   = $('activeContent');
 const makeHeader      = $('makeHeader');
 const checkHeader     = $('checkHeader');
+const packHeader      = $('packHeader');
 const makeBatchBadges  = $('makeBatchBadges');
 const sheetTabs       = $('sheetTabs');
 const dataTable       = $('dataTable');
@@ -664,9 +680,11 @@ function enterMode(mode) {
   activeContent.style.display = 'block';
   makeHeader.style.display    = mode === 'make'  ? 'block' : 'none';
   checkHeader.style.display   = mode === 'check' ? 'block' : 'none';
-  headerSub.textContent       = mode === 'make'  ? '제작' : '검수';
+  packHeader.style.display    = mode === 'pack'  ? 'block' : 'none';
+  headerSub.textContent       = { make: '제작', check: '검수', pack: '포장' }[mode] || mode;
   if (mode === 'make')  renderBatchBadges();
   if (mode === 'check') renderCheckBatchTabs();
+  if (mode === 'pack')  renderPackBatchTabs();
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
   loadSheet(currentSheet);
   setUIState('idle');
@@ -733,6 +751,30 @@ function setCheckBatch(batch) {
   setUIState('idle');
 }
 
+function renderPackBatchTabs() {
+  const orders = groupedOrders[currentSheet] || [];
+  const batchSet = new Set();
+  orders.forEach(o => batchSet.add(o.batch || '1차'));
+  const batches = [...batchSet].sort((a, b) => parseInt(a) - parseInt(b));
+  const tabs = $('packBatchTabs');
+  if (!tabs) return;
+  tabs.innerHTML = [
+    `<button class="cat-tab active" data-batch="all" onclick="setPackBatch('all')">전체</button>`,
+    ...batches.map(b =>
+      `<button class="cat-tab" data-batch="${b}" onclick="setPackBatch('${b}')">${b}</button>`)
+  ].join('');
+}
+
+function setPackBatch(batch) {
+  currentBatch = batch;
+  document.querySelectorAll('#packBatchTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.batch === batch)
+  );
+  doStop();
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
 function loadSheet(name) {
   currentSheet = name;
   document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.textContent === name));
@@ -744,8 +786,8 @@ function loadSheet(name) {
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
   }
-  // 검수 모드: 차수 필터 적용
-  if (currentMode === 'check' && currentBatch !== 'all') {
+  // 검수·포장 모드: 차수 필터 적용
+  if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
 
@@ -796,7 +838,7 @@ function buildTexts() {
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
   }
-  if (currentMode === 'check' && currentBatch !== 'all') {
+  if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
 
@@ -902,7 +944,7 @@ function buildTexts() {
     return result;
   }
 
-  // 검수 모드: 모든 내용 읽음 (변경 없음)
+  // 검수·포장 모드: 모든 내용 읽음
   return validPairs.flatMap(({ o, idx }) => {
     let t = `${sinoNum(o.no)}번, ${o.name}`;
     if (o.groupLabel)   t += `, ${o.groupLabel}`;
