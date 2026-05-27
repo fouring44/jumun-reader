@@ -910,11 +910,11 @@ function buildTexts() {
 
       if (makeReadMode === 'leather') {
         if (leather) parts.push(leather);
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 });
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 683 });
       } else if (makeReadMode === 'numColor') {
         if (leather)    parts.push(leather);
         if (o.numColor) parts.push(o.numColor);
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 });
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 683 });
       } else {
         // 번호 모드: 낱자 읽기
         if (leather)    parts.push(leather);
@@ -926,7 +926,7 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 1500 : 455,
+            postDelay: i < digits.length - 1 ? 1500 : 683,
             numRate: true
           });
         });
@@ -944,7 +944,7 @@ function buildTexts() {
           groups.get(key).count++;
         });
         groups.forEach(({ key, count, firstIdx }) => {
-          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, postDelay: 455 });
+          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, postDelay: 683 });
         });
       } else if (makeReadMode === 'numColor') {
         const groups = new Map();
@@ -958,7 +958,7 @@ function buildTexts() {
           groups.get(mapKey).count++;
         });
         groups.forEach(({ text, count, firstIdx }) => {
-          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, postDelay: 455 });
+          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, postDelay: 683 });
         });
       } else {
         // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
@@ -985,7 +985,7 @@ function buildTexts() {
             );
             text = `${label} ${parts.join(', ')}입니다`;
           }
-          result.push({ text, orderIdx: firstIdx, postDelay: 455 });
+          result.push({ text, orderIdx: firstIdx, postDelay: 683 });
         });
       }
     }
@@ -1023,7 +1023,7 @@ function buildTexts() {
       } else {
         if (o.num) parts.push(o.num);
       }
-      return { text: parts.join(', '), orderIdx: idx, postDelay: 455 };
+      return { text: parts.join(', '), orderIdx: idx, postDelay: 683 };
     });
   }
 
@@ -1056,7 +1056,7 @@ function buildTexts() {
     } else {
       if (o.num) parts.push(o.num);
     }
-    return { text: parts.join(', '), orderIdx: idx, postDelay: 455 };
+    return { text: parts.join(', '), orderIdx: idx, postDelay: 683 };
   });
 }
 
