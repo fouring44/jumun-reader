@@ -1011,11 +1011,12 @@ function buildTexts() {
         const groups = new Map();
         others.forEach(({ o, idx }) => {
           const key = leatherOf(o) || '(정보 없음)';
-          if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx });
-          groups.get(key).count++;
+          if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx, idxs: [] });
+          const g = groups.get(key);
+          g.count++; g.idxs.push(idx);
         });
-        groups.forEach(({ key, count, firstIdx }) => {
-          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, postDelay: 956 });
+        groups.forEach(({ key, count, firstIdx, idxs }) => {
+          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 956 });
         });
       } else if (makeReadMode === 'numColor') {
         const groups = new Map();
@@ -1024,12 +1025,13 @@ function buildTexts() {
           const mapKey = (leather || '') + '|' + (o.numColor || '');
           if (!groups.has(mapKey)) {
             const text = [leather, o.numColor].filter(Boolean).join(', ') || '(정보 없음)';
-            groups.set(mapKey, { text, count: 0, firstIdx: idx });
+            groups.set(mapKey, { text, count: 0, firstIdx: idx, idxs: [] });
           }
-          groups.get(mapKey).count++;
+          const g = groups.get(mapKey);
+          g.count++; g.idxs.push(idx);
         });
-        groups.forEach(({ text, count, firstIdx }) => {
-          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, postDelay: 956 });
+        groups.forEach(({ text, count, firstIdx, idxs }) => {
+          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 956 });
         });
       } else {
         // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
@@ -1039,12 +1041,13 @@ function buildTexts() {
           const groupKey = leather + '|' + (o.numColor || '');
           if (!numGroups.has(groupKey)) {
             const label = [leather, o.numColor].filter(Boolean).join(', ');
-            numGroups.set(groupKey, { label, numMap: new Map(), firstIdx: idx });
+            numGroups.set(groupKey, { label, numMap: new Map(), firstIdx: idx, idxs: [] });
           }
           const lg = numGroups.get(groupKey);
           lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
+          lg.idxs.push(idx);
         });
-        numGroups.forEach(({ label, numMap, firstIdx }) => {
+        numGroups.forEach(({ label, numMap, firstIdx, idxs }) => {
           const entries = [...numMap.entries()];
           let text;
           if (entries.length === 1) {
@@ -1056,7 +1059,7 @@ function buildTexts() {
             );
             text = `${label} ${parts.join(', ')}입니다`;
           }
-          result.push({ text, orderIdx: firstIdx, postDelay: 956 });
+          result.push({ text, orderIdx: firstIdx, idxs, postDelay: 956 });
         });
       }
     }
@@ -1212,7 +1215,9 @@ playBtn.addEventListener('click', () => {
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
     let startIdx = 0;
     if (selectedOrderIdx != null) {
-      const found = utterances.findIndex(u => u.orderIdx === selectedOrderIdx);
+      const found = utterances.findIndex(u =>
+        u.orderIdx === selectedOrderIdx || (u.idxs && u.idxs.includes(selectedOrderIdx))
+      );
       if (found !== -1) startIdx = found;
     }
     currentIdx = startIdx;
