@@ -813,12 +813,12 @@ function buildTexts() {
 
         if (makeReadMode === 'leather') {
           if (leather) parts.push(leather);
-          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx }];
+          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 }];
         }
         if (makeReadMode === 'numColor') {
           if (leather)    parts.push(leather);
           if (o.numColor) parts.push(o.numColor);
-          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx }];
+          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 }];
         }
         // 번호 모드: 가죽+숫자컬러 읽고 → 숫자 낱자를 느리게·간격 두고 읽음
         if (leather)    parts.push(leather);
@@ -830,7 +830,7 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 600 : 350,
+            postDelay: i < digits.length - 1 ? 600 : 455,
             numRate: true
           });
         });
