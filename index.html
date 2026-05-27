@@ -634,8 +634,21 @@ function parseOrders(rows) {
         if (!skip2) last = o2;
         continue;
       }
-      // 단순 빈 연속 행 → 수량 카운트만 증가
-      if (row.some(c => str(c) !== '')) last.count++;
+      // 동일 옵션 중복 연속 행 → 별도 주문으로 추가하여 표에 두 줄로 표시
+      if (row.some(c => str(c) !== '')) {
+        const noteForDup = (note && note.trim()) ? note : last.note;
+        const skip3 = !last.num || (noteForDup || '').includes('확인중');
+        const o3 = {
+          no: '', name: last.name, num: last.num, note: noteForDup,
+          row, headers: last.headers, count: 1, skip: skip3,
+          skipReason: skip3 ? ((noteForDup || '').includes('확인중') ? '확인중' : '숫자없음') : '',
+          leatherColor: last.leatherColor, numColor: last.numColor, invoice: last.invoice,
+          productType: last.productType, batch: last.batch,
+          multiType: 'single', groupLabel: ''
+        };
+        orders.push(o3);
+        if (!skip3) last = o3;
+      }
       continue;
     }
     if (!name) continue;
@@ -1096,27 +1109,12 @@ function buildTexts() {
     return result;
   }
 
-  // 포장 모드: 모든 주문 개별 읽기 (검수와 동일한 형식, 묶음 없음)
+  // 포장 모드: 모든 주문 개별 읽기 (각 행을 별도로 읽음, 'N개 구매' 안내 없음)
   if (currentMode === 'pack') {
-    // 같은 사람·같은 상품·같은 옵션 중복 행만 카운트 (다른 옵션/번호는 제외)
-    const ppCount = {};
-    validPairs.forEach(({ o }) => {
-      if (o.multiType === 'same_option') {
-        const k = `${o.name}|${o.productType}`;
-        ppCount[k] = (ppCount[k] || 0) + 1;
-      }
-    });
     let prevLbl = null;
     return validPairs.map(({ o, idx }) => {
       const parts = [o.name];
-      if (o.multiType === 'set') {
-        parts.push('세트');
-      } else {
-        // 같은 옵션 중복 행수 또는 단일 행 내 수량(count) 중 큰 값
-        const sameOpt = o.multiType === 'same_option' ? (ppCount[`${o.name}|${o.productType}`] || 1) : 1;
-        const cnt = Math.max(sameOpt, o.count || 1);
-        if (cnt > 1) parts.push(`${cnt}개 구매`);
-      }
+      if (o.multiType === 'set') parts.push('세트');
       const lbl = getProductLabel(o);
       if (lbl !== prevLbl) parts.push(lbl);
       prevLbl = lbl;
