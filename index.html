@@ -807,70 +807,99 @@ function buildTexts() {
       ? o.leatherColor.split('/')[1].trim()
       : o.leatherColor;
 
-    // 가죽 탭: 동일 가죽색상 묶어서 건수 읽기
-    if (makeReadMode === 'leather') {
-      const groups = new Map();
-      validPairs.forEach(({ o, idx }) => {
-        const key = leatherOf(o) || '(정보 없음)';
-        if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx });
-        groups.get(key).count++;
-      });
-      return [...groups.values()].map(({ key, count, firstIdx }) => ({
-        text: `${key} ${count}건입니다`,
-        orderIdx: firstIdx,
-        postDelay: 455
-      }));
-    }
+    const nonOther = validPairs.filter(({ o }) => o.productType !== 'other');
+    const others   = validPairs.filter(({ o }) => o.productType === 'other');
+    const result   = [];
 
-    // 숫자색상 탭: 가죽+숫자색상 묶어서 건수 읽기
-    if (makeReadMode === 'numColor') {
-      const groups = new Map();
-      validPairs.forEach(({ o, idx }) => {
-        const leather = leatherOf(o);
-        const mapKey = (leather || '') + '|' + (o.numColor || '');
-        if (!groups.has(mapKey)) {
-          const text = [leather, o.numColor].filter(Boolean).join(', ') || '(정보 없음)';
-          groups.set(mapKey, { text, count: 0, firstIdx: idx });
-        }
-        groups.get(mapKey).count++;
-      });
-      return [...groups.values()].map(({ text, count, firstIdx }) => ({
-        text: `${text} ${count}건입니다`,
-        orderIdx: firstIdx,
-        postDelay: 455
-      }));
-    }
+    // 주차번호판·키링: 기존 낱개 읽기
+    nonOther.forEach(({ o, idx }) => {
+      const leather = leatherOf(o);
+      const parts = [];
+      if (o.groupLabel) parts.push(o.groupLabel);
 
-    // 번호 탭: 가죽+숫자색상별로 묶어 개입수·건수 읽기
-    // 예) "비상탈출 선물포장 2개입 3건입니다"
-    // 예) "비상탈출 선물포장 1개입 2건, 2개입 5건입니다"
-    const numGroups = new Map();
-    validPairs.forEach(({ o, idx }) => {
-      const leather = leatherOf(o) || '(정보 없음)';
-      const groupKey = leather + '|' + (o.numColor || '');
-      if (!numGroups.has(groupKey)) {
-        const label = [leather, o.numColor].filter(Boolean).join(', ');
-        numGroups.set(groupKey, { label, numMap: new Map(), firstIdx: idx });
-      }
-      const lg = numGroups.get(groupKey);
-      lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
-    });
-    return [...numGroups.values()].map(({ label, numMap, firstIdx }) => {
-      const entries = [...numMap.entries()];
-      let text;
-      if (entries.length === 1) {
-        const [num, count] = entries[0];
-        text = num
-          ? `${label} ${num}개입 ${count}건입니다`
-          : `${label} ${count}건입니다`;
+      if (makeReadMode === 'leather') {
+        if (leather) parts.push(leather);
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 });
+      } else if (makeReadMode === 'numColor') {
+        if (leather)    parts.push(leather);
+        if (o.numColor) parts.push(o.numColor);
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 455 });
       } else {
-        const parts = entries.map(([num, count]) =>
-          num ? `${num}개입 ${count}건` : `${count}건`
-        );
-        text = `${label} ${parts.join(', ')}입니다`;
+        // 번호 모드: 낱자 읽기
+        if (leather)    parts.push(leather);
+        if (o.numColor) parts.push(o.numColor);
+        const beforeLen = result.length;
+        if (parts.length) result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 300 });
+        const digits = (o.num || '').replace(/\D/g, '').split('').filter(Boolean);
+        digits.forEach((d, i) => {
+          result.push({
+            text: DIGIT[parseInt(d)],
+            orderIdx: idx,
+            postDelay: i < digits.length - 1 ? 1500 : 455,
+            numRate: true
+          });
+        });
+        if (result.length === beforeLen) result.push({ text: '(번호 없음)', orderIdx: idx });
       }
-      return { text, orderIdx: firstIdx, postDelay: 455 };
     });
+
+    // 기타 상품: 묶어서 건수 읽기
+    if (others.length) {
+      if (makeReadMode === 'leather') {
+        const groups = new Map();
+        others.forEach(({ o, idx }) => {
+          const key = leatherOf(o) || '(정보 없음)';
+          if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx });
+          groups.get(key).count++;
+        });
+        groups.forEach(({ key, count, firstIdx }) => {
+          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, postDelay: 455 });
+        });
+      } else if (makeReadMode === 'numColor') {
+        const groups = new Map();
+        others.forEach(({ o, idx }) => {
+          const leather = leatherOf(o);
+          const mapKey = (leather || '') + '|' + (o.numColor || '');
+          if (!groups.has(mapKey)) {
+            const text = [leather, o.numColor].filter(Boolean).join(', ') || '(정보 없음)';
+            groups.set(mapKey, { text, count: 0, firstIdx: idx });
+          }
+          groups.get(mapKey).count++;
+        });
+        groups.forEach(({ text, count, firstIdx }) => {
+          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, postDelay: 455 });
+        });
+      } else {
+        // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
+        const numGroups = new Map();
+        others.forEach(({ o, idx }) => {
+          const leather = leatherOf(o) || '(정보 없음)';
+          const groupKey = leather + '|' + (o.numColor || '');
+          if (!numGroups.has(groupKey)) {
+            const label = [leather, o.numColor].filter(Boolean).join(', ');
+            numGroups.set(groupKey, { label, numMap: new Map(), firstIdx: idx });
+          }
+          const lg = numGroups.get(groupKey);
+          lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
+        });
+        numGroups.forEach(({ label, numMap, firstIdx }) => {
+          const entries = [...numMap.entries()];
+          let text;
+          if (entries.length === 1) {
+            const [num, count] = entries[0];
+            text = num ? `${label} ${num}개입 ${count}건입니다` : `${label} ${count}건입니다`;
+          } else {
+            const parts = entries.map(([num, count]) =>
+              num ? `${num}개입 ${count}건` : `${count}건`
+            );
+            text = `${label} ${parts.join(', ')}입니다`;
+          }
+          result.push({ text, orderIdx: firstIdx, postDelay: 455 });
+        });
+      }
+    }
+
+    return result;
   }
 
   // 검수 모드: 모든 내용 읽음 (변경 없음)
