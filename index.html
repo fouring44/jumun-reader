@@ -1143,7 +1143,7 @@ function speakAt(idx) {
   const u = new SpeechSynthesisUtterance(text);
   u.lang  = 'ko-KR';
   const baseRate = parseFloat(rateRange.value);
-  u.rate  = numRate2 ? parseFloat((baseRate * 0.624).toFixed(2)) : numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
+  u.rate  = numRate2 ? parseFloat((baseRate * 0.312).toFixed(2)) : numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
   u.pitch = parseFloat(pitchRange.value);
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
