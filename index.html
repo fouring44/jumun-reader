@@ -934,12 +934,17 @@ function buildTexts() {
       } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
-        result.push({ text: colorPart ? `${colorPart} 플레이트` : '(정보 없음)', orderIdx: idx, postDelay: 956 });
+        const p1Parts = [];
+        if (o.groupLabel)      p1Parts.push(o.groupLabel);
+        else if (o.count > 1)  p1Parts.push(`${o.count}개`);
+        p1Parts.push(colorPart ? `${colorPart} 플레이트` : '(정보 없음)');
+        result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 956 });
       } else if (makeReadMode === 'plate2') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
         const firstParts = [];
-        if (o.groupLabel) firstParts.push(o.groupLabel);
+        if (o.groupLabel)      firstParts.push(o.groupLabel);
+        else if (o.count > 1)  firstParts.push(`${o.count}개`);
         if (leather)      firstParts.push(leather);
         if (o.numColor)   firstParts.push(o.numColor);
         if (firstParts.length) result.push({ text: firstParts.join(', '), orderIdx: idx, postDelay: 300 });
