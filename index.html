@@ -889,7 +889,10 @@ function speakAt(idx) {
   u.pitch = parseFloat(pitchRange.value);
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
-  u.onend   = () => { if (ttsState === 'speaking') speakAt(idx + 1); };
+  u.onend   = () => {
+    if (ttsState !== 'speaking') return;
+    setTimeout(() => { if (ttsState === 'speaking') speakAt(idx + 1); }, 350);
+  };
   u.onerror = e => { if (e.error === 'interrupted') return; if (ttsState === 'speaking') speakAt(idx + 1); };
   window.speechSynthesis.speak(u);
 }
