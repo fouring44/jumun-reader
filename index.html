@@ -347,6 +347,14 @@
         <span style="font-size:15px; font-weight:600; color:var(--text)">포장</span>
       </div>
       <div class="cat-tabs" id="packBatchTabs"></div>
+      <div class="cat-tabs" id="packCatTabs">
+        <button class="cat-tab active" data-pcat="all"     onclick="setPackCat('all')">전체</button>
+        <button class="cat-tab"        data-pcat="keyring" onclick="setPackCat('keyring')">키링</button>
+        <button class="cat-tab"        data-pcat="set"     onclick="setPackCat('set')">세트</button>
+        <button class="cat-tab"        data-pcat="plate"   onclick="setPackCat('plate')">주차번호판</button>
+        <button class="cat-tab"        data-pcat="escape"  onclick="setPackCat('escape')">비상탈출</button>
+        <button class="cat-tab"        data-pcat="vent"    onclick="setPackCat('vent')">벤트</button>
+      </div>
     </div>
 
     <div class="legend">
@@ -399,7 +407,7 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle';
-let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather';
+let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all';
 
 // ═══════════════════════════════════════════════
 //  DOM
@@ -684,8 +692,11 @@ function enterMode(mode) {
   headerSub.textContent       = { make: '제작', check: '검수', pack: '포장' }[mode] || mode;
   if (mode === 'make')  renderBatchBadges();
   if (mode === 'check') renderCheckBatchTabs();
-  if (mode === 'pack')  renderPackBatchTabs();
+  if (mode === 'pack')  { packCat = 'all'; renderPackBatchTabs(); }
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
+  document.querySelectorAll('#packCatTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.pcat === 'all')
+  );
   loadSheet(currentSheet);
   setUIState('idle');
 }
@@ -696,6 +707,7 @@ function goBack() {
   currentCat    = 'all';
   currentBatch  = 'all';
   makeReadMode  = 'leather';
+  packCat       = 'all';
   activeContent.style.display = 'none';
   modeSelectEl.style.display  = 'block';
   headerSub.textContent       = fileNameLabel.textContent.replace('📄 ', '');
@@ -775,6 +787,25 @@ function setPackBatch(batch) {
   setUIState('idle');
 }
 
+function setPackCat(cat) {
+  packCat = cat;
+  document.querySelectorAll('#packCatTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.pcat === cat)
+  );
+  doStop();
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
+function filterByPackCat(orders, cat) {
+  if (cat === 'keyring') return orders.filter(o => o.productType === 'keyring' && o.multiType !== 'set');
+  if (cat === 'set')     return orders.filter(o => o.multiType === 'set');
+  if (cat === 'plate')   return orders.filter(o => o.productType === 'plate' && o.multiType !== 'set');
+  if (cat === 'escape')  return orders.filter(o => o.productType === 'other' && o.leatherColor.includes('비상탈출'));
+  if (cat === 'vent')    return orders.filter(o => o.productType === 'other' && o.leatherColor.includes('벤트'));
+  return orders;
+}
+
 function loadSheet(name) {
   currentSheet = name;
   document.querySelectorAll('.sheet-tab').forEach(t => t.classList.toggle('active', t.textContent === name));
@@ -789,6 +820,10 @@ function loadSheet(name) {
   // 검수·포장 모드: 차수 필터 적용
   if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
+  }
+  // 포장 모드: 제품 종류 필터 적용
+  if (currentMode === 'pack' && packCat !== 'all') {
+    orders = filterByPackCat(orders, packCat);
   }
 
   dataTable.innerHTML = '';
@@ -840,6 +875,9 @@ function buildTexts() {
   }
   if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
+  }
+  if (currentMode === 'pack' && packCat !== 'all') {
+    orders = filterByPackCat(orders, packCat);
   }
 
   const validPairs = orders.map((o, idx) => ({ o, idx })).filter(({ o }) => !o.skip);
@@ -944,7 +982,51 @@ function buildTexts() {
     return result;
   }
 
-  // 검수·포장 모드: 모든 내용 읽음
+  // 포장 모드: 기타(비상탈출·벤트)는 묶어서 건수, 나머지는 검수 방식
+  if (currentMode === 'pack') {
+    const nonOther = validPairs.filter(({ o }) => o.productType !== 'other');
+    const others   = validPairs.filter(({ o }) => o.productType === 'other');
+    const result   = [];
+
+    nonOther.forEach(({ o, idx }) => {
+      let t = `${sinoNum(o.no)}번, ${o.name}`;
+      if (o.groupLabel)   t += `, ${o.groupLabel}`;
+      if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
+      if (o.leatherColor) t += `, ${o.leatherColor}`;
+      if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
+      if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
+      if (o.note)         t += `, ${o.note}`;
+      result.push({ text: t, orderIdx: idx, postDelay: 455 });
+    });
+
+    if (others.length) {
+      const numGroups = new Map();
+      others.forEach(({ o, idx }) => {
+        const key = o.leatherColor + '|' + (o.numColor || '');
+        if (!numGroups.has(key)) {
+          const label = [o.leatherColor, o.numColor].filter(Boolean).join(', ');
+          numGroups.set(key, { label, numMap: new Map(), firstIdx: idx });
+        }
+        const lg = numGroups.get(key);
+        lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
+      });
+      numGroups.forEach(({ label, numMap, firstIdx }) => {
+        const entries = [...numMap.entries()];
+        let text;
+        if (entries.length === 1) {
+          const [num, count] = entries[0];
+          text = num ? `${label} ${num}개입 ${count}건입니다` : `${label} ${count}건입니다`;
+        } else {
+          const parts = entries.map(([num, count]) => num ? `${num}개입 ${count}건` : `${count}건`);
+          text = `${label} ${parts.join(', ')}입니다`;
+        }
+        result.push({ text, orderIdx: firstIdx, postDelay: 455 });
+      });
+    }
+    return result;
+  }
+
+  // 검수 모드: 모든 내용 읽음
   return validPairs.flatMap(({ o, idx }) => {
     let t = `${sinoNum(o.no)}번, ${o.name}`;
     if (o.groupLabel)   t += `, ${o.groupLabel}`;
