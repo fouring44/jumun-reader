@@ -140,6 +140,13 @@
   }
   .badge-multi   { background: var(--green-mid); color: var(--green-dark); }
   .badge-skip    { background: var(--orange-light); color: var(--orange-dark); }
+  /* ── 차수 열 ── */
+  .batch-cell { width: 28px; text-align: center; font-size: 10px; font-weight: 700; padding: 6px 4px !important; white-space: nowrap; }
+  .batch-1 { background: var(--bg3); color: var(--text2); }
+  .batch-2 { background: #d4e6ff; color: #1a4a8a; }
+  .batch-3 { background: #fff3cd; color: #856404; }
+  .batch-4 { background: #f0d4ff; color: #5a1a8a; }
+
   .badge-plate   { background: #d4e6ff; color: #1a4a8a; }
   .badge-keyring { background: #e8d4ff; color: #5a1a8a; }
   .badge-other   { background: var(--bg3); color: var(--text2); }
@@ -482,7 +489,7 @@ function convertNumField(s) {
   });
   // 나머지 숫자 낱자 읽기 (하이픈 구분자 제거)
   s = s.replace(/[\-]?\s*(\d[\d\-]*)/g, (_, part) => {
-    return ' ' + part.replace(/\-/g, '').split('').map(d => DIGIT[parseInt(d)]).join('');
+    return ' ' + part.replace(/\-/g, '').split('').map(d => DIGIT[parseInt(d)]).join(', ');
   });
   return s.trim();
 }
@@ -659,12 +666,12 @@ function loadSheet(name) {
 
   dataTable.innerHTML = '';
   if (!orders.length) {
-    dataTable.innerHTML = '<tbody><tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text2)">해당 카테고리의 주문이 없습니다</td></tr></tbody>';
+    dataTable.innerHTML = '<tbody><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text2)">해당 카테고리의 주문이 없습니다</td></tr></tbody>';
     return;
   }
 
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>번호</th><th>수령인</th><th>가죽컬러</th><th>숫자컬러</th><th>숫자</th><th>비고</th><th>상태</th></tr>';
+  thead.innerHTML = '<tr><th style="width:28px">차수</th><th>번호</th><th>수령인</th><th>가죽컬러</th><th>숫자컬러</th><th>숫자</th><th>비고</th><th>상태</th></tr>';
   dataTable.appendChild(thead);
 
   const tbody = document.createElement('tbody');
@@ -684,7 +691,10 @@ function loadSheet(name) {
       else if (o.count > 1) badge += `<span class="badge badge-multi">${o.count}개 묶음</span> `;
       if (o.batch) badge += `<span class="badge badge-batch">${o.batch}</span>`;
     }
-    tr.innerHTML = `<td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
+    const batchNum = o.batch ? parseInt(o.batch) : 1;
+    const batchLabel = o.batch || '1차';
+    const batchClass = `batch-cell batch-${Math.min(batchNum, 4)}`;
+    tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
     tbody.appendChild(tr);
   });
   dataTable.appendChild(tbody);
