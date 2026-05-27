@@ -1098,9 +1098,10 @@ function buildTexts() {
 
   // 포장 모드: 모든 주문 개별 읽기 (검수와 동일한 형식, 묶음 없음)
   if (currentMode === 'pack') {
+    // 같은 사람·같은 상품·같은 옵션 중복 행만 카운트 (다른 옵션/번호는 제외)
     const ppCount = {};
     validPairs.forEach(({ o }) => {
-      if (o.multiType !== 'set') {
+      if (o.multiType === 'same_option') {
         const k = `${o.name}|${o.productType}`;
         ppCount[k] = (ppCount[k] || 0) + 1;
       }
@@ -1111,7 +1112,9 @@ function buildTexts() {
       if (o.multiType === 'set') {
         parts.push('세트');
       } else {
-        const cnt = Math.max(ppCount[`${o.name}|${o.productType}`] || 1, o.count || 1);
+        // 같은 옵션 중복 행수 또는 단일 행 내 수량(count) 중 큰 값
+        const sameOpt = o.multiType === 'same_option' ? (ppCount[`${o.name}|${o.productType}`] || 1) : 1;
+        const cnt = Math.max(sameOpt, o.count || 1);
         if (cnt > 1) parts.push(`${cnt}개 구매`);
       }
       const lbl = getProductLabel(o);
