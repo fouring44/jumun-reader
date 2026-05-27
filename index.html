@@ -1228,22 +1228,37 @@ function speakAt(idx) {
 // ═══════════════════════════════════════════════
 //  버튼 핸들러
 // ═══════════════════════════════════════════════
+function findUtteranceIdx(sel) {
+  if (sel == null) return -1;
+  const n = Number(sel);
+  return utterances.findIndex(u =>
+    Number(u.orderIdx) === n || (Array.isArray(u.idxs) && u.idxs.map(Number).includes(n))
+  );
+}
+
 playBtn.addEventListener('click', () => {
   if (ttsState === 'paused') {
-    setUIState('speaking'); speakAt(currentIdx);
+    // 일시정지 중 다른 행을 선택했다면 그 행으로 점프
+    let resumeIdx = currentIdx;
+    if (selectedOrderIdx != null && utterances.length) {
+      const curOrderIdx = utterances[currentIdx]?.orderIdx;
+      if (Number(curOrderIdx) !== Number(selectedOrderIdx)) {
+        const found = findUtteranceIdx(selectedOrderIdx);
+        if (found !== -1) resumeIdx = found;
+      }
+    }
+    currentIdx = resumeIdx;
+    window.speechSynthesis.cancel();
+    setUIState('speaking'); speakAt(resumeIdx);
   } else {
     utterances = buildTexts();
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
     let startIdx = 0;
     if (selectedOrderIdx != null) {
-      const sel = Number(selectedOrderIdx);
-      const found = utterances.findIndex(u =>
-        Number(u.orderIdx) === sel || (Array.isArray(u.idxs) && u.idxs.map(Number).includes(sel))
-      );
+      const found = findUtteranceIdx(selectedOrderIdx);
       if (found !== -1) {
         startIdx = found;
       } else {
-        // 일치하는 utterance 없음 → 처음부터 읽되 사용자에게 알림
         statusText.textContent = '선택한 행은 읽을 수 없어 처음부터 재생합니다';
       }
     }
