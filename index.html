@@ -993,21 +993,17 @@ function buildTexts() {
     return result;
   }
 
-  // 포장 모드: 기타(비상탈출·벤트)는 묶어서 건수, 나머지는 검수 방식
+  // 포장 모드: 모든 주문 개별 읽기 (검수와 동일한 형식, 묶음 없음)
   if (currentMode === 'pack') {
-    const nonOther = validPairs.filter(({ o }) => o.productType !== 'other');
-    const others   = validPairs.filter(({ o }) => o.productType === 'other');
-    const result   = [];
-
     const ppCount = {};
-    nonOther.forEach(({ o }) => {
+    validPairs.forEach(({ o }) => {
       if (o.multiType !== 'set') {
         const k = `${o.name}|${o.productType}`;
         ppCount[k] = (ppCount[k] || 0) + 1;
       }
     });
     let prevLbl = null;
-    nonOther.forEach(({ o, idx }) => {
+    return validPairs.map(({ o, idx }) => {
       const parts = [o.name];
       if (o.multiType === 'set') {
         parts.push('세트');
@@ -1027,34 +1023,8 @@ function buildTexts() {
       } else {
         if (o.num) parts.push(o.num);
       }
-      result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 455 });
+      return { text: parts.join(', '), orderIdx: idx, postDelay: 455 };
     });
-
-    if (others.length) {
-      const numGroups = new Map();
-      others.forEach(({ o, idx }) => {
-        const key = o.leatherColor + '|' + (o.numColor || '');
-        if (!numGroups.has(key)) {
-          const label = [o.leatherColor, o.numColor].filter(Boolean).join(', ');
-          numGroups.set(key, { label, numMap: new Map(), firstIdx: idx });
-        }
-        const lg = numGroups.get(key);
-        lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
-      });
-      numGroups.forEach(({ label, numMap, firstIdx }) => {
-        const entries = [...numMap.entries()];
-        let text;
-        if (entries.length === 1) {
-          const [num, count] = entries[0];
-          text = num ? `${label} ${num}개입 ${count}건입니다` : `${label} ${count}건입니다`;
-        } else {
-          const parts = entries.map(([num, count]) => num ? `${num}개입 ${count}건` : `${count}건`);
-          text = `${label} ${parts.join(', ')}입니다`;
-        }
-        result.push({ text, orderIdx: firstIdx, postDelay: 455 });
-      });
-    }
-    return result;
   }
 
   // 검수 모드: 이름 → 세트/구매수 → 제품종류(변경시만) → 번호
