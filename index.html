@@ -984,12 +984,15 @@ function buildTexts() {
     const result   = [];
 
     // 주차번호판·키링: 기존 낱개 읽기
+    // 동일색상 동일번호 중복은 별도 행으로 분리되므로 groupLabel('동일색상 동일번호') 발음 생략, '세트'만 발음
     const nativeCount = n => (n > 0 && n < NATIVE.length ? NATIVE[n] : String(n)) + '개';
+    const speakLabel  = o => o.multiType === 'same_option' ? '' : o.groupLabel;
     nonOther.forEach(({ o, idx }) => {
       const leather = leatherOf(o);
       const isPlateMulti = o.productType === 'plate' && o.count > 1;
+      const label = speakLabel(o);
       const parts = [];
-      if (o.groupLabel) parts.push(o.groupLabel);
+      if (label) parts.push(label);
 
       if (makeReadMode === 'leather') {
         if (leather) parts.push(leather);
@@ -1004,7 +1007,7 @@ function buildTexts() {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
         const p1Parts = [];
-        if (o.groupLabel)  p1Parts.push(o.groupLabel);
+        if (label) p1Parts.push(label);
         p1Parts.push(colorPart ? `${colorPart} 플레이트` : '(정보 없음)');
         if (isPlateMulti)  p1Parts.push(nativeCount(o.count));
         result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 956 });
@@ -1012,7 +1015,7 @@ function buildTexts() {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
         const firstParts = [];
-        if (o.groupLabel)  firstParts.push(o.groupLabel);
+        if (label) firstParts.push(label);
         if (isPlateMulti)  firstParts.push(nativeCount(o.count));
         if (leather)      firstParts.push(leather);
         if (o.numColor)   firstParts.push(o.numColor);
