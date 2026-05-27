@@ -60,8 +60,9 @@
     position: sticky; top: 0; z-index: 10;
     display: flex; align-items: center; justify-content: space-between;
   }
-  header h1 { font-size: 18px; font-weight: 600; }
+  header h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   header span { font-size: 13px; color: var(--text2); }
+  .version { font-size: 11px; font-weight: 500; color: var(--text2); background: var(--bg3); border-radius: 6px; padding: 2px 7px; letter-spacing: 0.3px; }
 
   /* ── 본문 ── */
   .page { padding: 16px 16px 100px; }
@@ -266,7 +267,7 @@
 <body>
 
 <header>
-  <h1>📋 주문 읽기</h1>
+  <h1>📋 주문 읽기 <span class="version" id="versionTag"></span></h1>
   <span id="headerSub">파일을 불러오세요</span>
 </header>
 
@@ -415,6 +416,14 @@ const preview         = $('preview');
 // ═══════════════════════════════════════════════
 //  이벤트
 // ═══════════════════════════════════════════════
+// 버전 표시 (파일 마지막 수정 시각)
+(function() {
+  const d = new Date(document.lastModified);
+  const pad = n => String(n).padStart(2, '0');
+  $('versionTag').textContent =
+    `${d.getFullYear()}.${pad(d.getMonth()+1)}.${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+})();
+
 uploadZone.addEventListener('click', () => fileInput.click());
 uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.style.background = 'var(--bg3)'; });
 uploadZone.addEventListener('dragleave', () => uploadZone.style.background = '');
@@ -794,37 +803,48 @@ function buildTexts() {
   return orders
     .map((o, idx) => ({ o, idx }))
     .filter(({ o }) => !o.skip)
-    .map(({ o, idx }) => {
-      let t;
+    .flatMap(({ o, idx }) => {
       if (currentMode === 'make') {
-        // 제작 모드: 가죽컬러는 "/" 뒤 소재만 읽음
         const leather = o.leatherColor.includes('/')
           ? o.leatherColor.split('/')[1].trim()
           : o.leatherColor;
         const parts = [];
         if (o.groupLabel) parts.push(o.groupLabel);
+
         if (makeReadMode === 'leather') {
           if (leather) parts.push(leather);
-        } else if (makeReadMode === 'numColor') {
-          if (leather)    parts.push(leather);
-          if (o.numColor) parts.push(o.numColor);
-        } else {
-          if (leather)    parts.push(leather);
-          if (o.numColor) parts.push(o.numColor);
-          if (o.num)      parts.push(convertNumField(o.num));
+          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx }];
         }
-        t = parts.join(', ') || '(정보 없음)';
-      } else {
-        // 검수 모드: 모든 내용 읽음
-        t = `${sinoNum(o.no)}번, ${o.name}`;
-        if (o.groupLabel)   t += `, ${o.groupLabel}`;
-        if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
-        if (o.leatherColor) t += `, ${o.leatherColor}`;
-        if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
-        if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
-        if (o.note)         t += `, ${o.note}`;
+        if (makeReadMode === 'numColor') {
+          if (leather)    parts.push(leather);
+          if (o.numColor) parts.push(o.numColor);
+          return [{ text: parts.join(', ') || '(정보 없음)', orderIdx: idx }];
+        }
+        // 번호 모드: 가죽+숫자컬러 읽고 → 숫자 낱자를 느리게·간격 두고 읽음
+        if (leather)    parts.push(leather);
+        if (o.numColor) parts.push(o.numColor);
+        const result = [];
+        if (parts.length) result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 300 });
+        const digits = (o.num || '').replace(/\D/g, '').split('').filter(Boolean);
+        digits.forEach((d, i) => {
+          result.push({
+            text: DIGIT[parseInt(d)],
+            orderIdx: idx,
+            postDelay: i < digits.length - 1 ? 600 : 350,
+            numRate: true
+          });
+        });
+        return result.length ? result : [{ text: '(번호 없음)', orderIdx: idx }];
       }
-      return { text: t, orderIdx: idx };
+      // 검수 모드: 모든 내용 읽음
+      let t = `${sinoNum(o.no)}번, ${o.name}`;
+      if (o.groupLabel)   t += `, ${o.groupLabel}`;
+      if (o.count > 1)    t += `, 총 ${NATIVE[o.count] || o.count}개 주문`;
+      if (o.leatherColor) t += `, ${o.leatherColor}`;
+      if (o.numColor)     t += `, 숫자색 ${o.numColor}`;
+      if (o.num)          t += `, 번호 ${convertNumField(o.num)}`;
+      if (o.note)         t += `, ${o.note}`;
+      return [{ text: t, orderIdx: idx }];
     });
 }
 
@@ -875,7 +895,7 @@ function speakAt(idx) {
     statusText.textContent = '✅ 읽기 완료';
     return;
   }
-  const { text, orderIdx } = utterances[idx];
+  const { text, orderIdx, postDelay = 350, numRate = false } = utterances[idx];
   currentIdx = idx;
   highlightRow(orderIdx);
   statusText.textContent = `${idx + 1} / ${utterances.length}건 읽는 중...`;
@@ -885,13 +905,14 @@ function speakAt(idx) {
   window.speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang  = 'ko-KR';
-  u.rate  = parseFloat(rateRange.value);
+  const baseRate = parseFloat(rateRange.value);
+  u.rate  = numRate ? parseFloat((baseRate * 0.8).toFixed(2)) : baseRate;
   u.pitch = parseFloat(pitchRange.value);
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
   u.onend   = () => {
     if (ttsState !== 'speaking') return;
-    setTimeout(() => { if (ttsState === 'speaking') speakAt(idx + 1); }, 350);
+    setTimeout(() => { if (ttsState === 'speaking') speakAt(idx + 1); }, postDelay);
   };
   u.onerror = e => { if (e.error === 'interrupted') return; if (ttsState === 'speaking') speakAt(idx + 1); };
   window.speechSynthesis.speak(u);
