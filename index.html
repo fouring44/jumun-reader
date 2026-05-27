@@ -1236,10 +1236,16 @@ playBtn.addEventListener('click', () => {
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
     let startIdx = 0;
     if (selectedOrderIdx != null) {
+      const sel = Number(selectedOrderIdx);
       const found = utterances.findIndex(u =>
-        u.orderIdx === selectedOrderIdx || (u.idxs && u.idxs.includes(selectedOrderIdx))
+        Number(u.orderIdx) === sel || (Array.isArray(u.idxs) && u.idxs.map(Number).includes(sel))
       );
-      if (found !== -1) startIdx = found;
+      if (found !== -1) {
+        startIdx = found;
+      } else {
+        // 일치하는 utterance 없음 → 처음부터 읽되 사용자에게 알림
+        statusText.textContent = '선택한 행은 읽을 수 없어 처음부터 재생합니다';
+      }
     }
     currentIdx = startIdx;
     window.speechSynthesis.cancel();
