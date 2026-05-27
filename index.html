@@ -28,6 +28,7 @@
     --orange-dark: #993C1D;
     --amber: #BA7517;
     --yellow-light: #FFF4C2;
+    --pink-light: #FFD6E0;
     --accent: #BA7517;
     --radius: 10px;
     --radius-sm: 7px;
@@ -44,6 +45,7 @@
       --blue-light: #0c3060;
       --green-light: #1a3020;
       --yellow-light: #5a4400;
+      --pink-light: #5a1f33;
       --accent: #E8B14A;
     }
   }
@@ -138,7 +140,7 @@
   tr:last-child td { border-bottom: none; }
   tr.row-skip td { opacity: 0.38; }
   tr.row-multi td { background: var(--green-light); }
-  tr.row-person-multi td { color: var(--red); font-weight: 600; }
+  tr.row-person-multi td { background: var(--pink-light); }
   tr.row-reading td { background: var(--blue-light) !important; }
   tr.row-selected td { box-shadow: inset 3px 0 0 var(--accent); background: var(--yellow-light) !important; }
   #dataTable tbody tr[data-order-idx]:not(.row-skip):hover td { background: var(--bg3); }
@@ -378,7 +380,7 @@
 
     <div class="legend">
       <div class="legend-item"><div class="legend-dot" style="background:var(--green-mid)"></div> 2개 이상 주문</div>
-      <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> 동일인 다중 주문</div>
+      <div class="legend-item"><div class="legend-dot" style="background:var(--pink-light)"></div> 동일인 다중 주문</div>
       <div class="legend-item"><div class="legend-dot" style="background:var(--orange-light)"></div> 읽기 제외</div>
     </div>
 
