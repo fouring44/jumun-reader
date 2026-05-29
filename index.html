@@ -1002,12 +1002,12 @@ function buildTexts() {
       if (makeReadMode === 'leather') {
         if (leather) parts.push(leather);
         if (isPlateMulti) parts.push(nativeCount(o.count));
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 });
       } else if (makeReadMode === 'numColor') {
         if (leather)    parts.push(leather);
         if (o.numColor) parts.push(o.numColor);
         if (isPlateMulti) parts.push(nativeCount(o.count));
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 });
+        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 });
       } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
@@ -1015,7 +1015,7 @@ function buildTexts() {
         if (label) p1Parts.push(label);
         p1Parts.push(colorPart ? `${colorPart} 플레이트` : '(정보 없음)');
         if (isPlateMulti)  p1Parts.push(nativeCount(o.count));
-        result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 956 });
+        result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 1956 });
       } else if (makeReadMode === 'plate2') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
@@ -1030,11 +1030,11 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 309 : (colorPart ? 300 : 956),
+            postDelay: i < digits.length - 1 ? 309 : (colorPart ? 300 : 1956),
             numRate2: true   // 현재 numRate보다 40% 느림 (baseRate * 0.48)
           });
         });
-        if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 956 });
+        if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 1956 });
         if (!firstParts.length && !digits.length) result.push({ text: '(정보 없음)', orderIdx: idx });
       } else {
         // 번호 모드: 낱자 읽기
@@ -1047,7 +1047,7 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 1500 : 956,
+            postDelay: i < digits.length - 1 ? 1800 : 1956,
             numRate: true
           });
         });
@@ -1066,7 +1066,7 @@ function buildTexts() {
           g.count++; g.idxs.push(idx);
         });
         groups.forEach(({ key, count, firstIdx, idxs }) => {
-          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 956 });
+          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 1956 });
         });
       } else if (makeReadMode === 'numColor') {
         const groups = new Map();
@@ -1081,7 +1081,7 @@ function buildTexts() {
           g.count++; g.idxs.push(idx);
         });
         groups.forEach(({ text, count, firstIdx, idxs }) => {
-          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 956 });
+          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 1956 });
         });
       } else {
         // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
@@ -1109,7 +1109,7 @@ function buildTexts() {
             );
             text = `${label} ${parts.join(', ')}입니다`;
           }
-          result.push({ text, orderIdx: firstIdx, idxs, postDelay: 956 });
+          result.push({ text, orderIdx: firstIdx, idxs, postDelay: 1956 });
         });
       }
     }
@@ -1135,7 +1135,7 @@ function buildTexts() {
       } else {
         if (o.num) parts.push(o.num);
       }
-      return { text: parts.join(', '), orderIdx: idx, postDelay: 956 };
+      return { text: parts.join(', '), orderIdx: idx, postDelay: 1956 };
     });
   }
 
@@ -1160,7 +1160,7 @@ function buildTexts() {
       if (o.numColor)     parts.push(o.numColor);
       if (o.num)          parts.push(o.num);
     }
-    return { text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 956 };
+    return { text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 };
   });
 }
 
