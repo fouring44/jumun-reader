@@ -326,8 +326,9 @@
     <div id="makeHeader" style="display:none">
       <div class="top-bar">
         <button class="back-btn" onclick="goBack()">← 뒤로</button>
-        <div class="batch-badges" id="makeBatchBadges"></div>
+        <span style="font-size:15px; font-weight:600; color:var(--text)">제작</span>
       </div>
+      <div class="cat-tabs" id="makeBatchTabs"></div>
       <div class="cat-tabs" id="catTabs">
         <button class="cat-tab active" data-cat="all"     onclick="setCat('all')">전체</button>
         <button class="cat-tab"        data-cat="plate"   onclick="setCat('plate')">주차번호판</button>
@@ -440,7 +441,6 @@ const activeContent   = $('activeContent');
 const makeHeader      = $('makeHeader');
 const checkHeader     = $('checkHeader');
 const packHeader      = $('packHeader');
-const makeBatchBadges  = $('makeBatchBadges');
 const sheetTabs       = $('sheetTabs');
 const dataTable       = $('dataTable');
 const playBtn         = $('playBtn');
@@ -604,11 +604,15 @@ function parseOrders(rows) {
   const C_NUMCOL  = colMap['숫자컬러'] ?? -1;
   const C_INV     = colMap['송장']     ?? -1;
   const headers   = rows[hi].map(str);
-  const orders = []; let last = null;
+  const orders = []; let last = null, blankRunLen = 0, sectionBatch = null;
 
   for (let i = hi + 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || row.every(c => c == null || str(c) === '')) continue;
+    if (!row || row.every(c => c == null || str(c) === '')) {
+      if (++blankRunLen >= 2) sectionBatch = null; // 섹션(제품종류) 구분 → 차수 초기화
+      continue;
+    }
+    blankRunLen = 0;
     const no   = str(row[C_NO]);
     const name = str(row[C_NAME]);
     const num  = str(row[C_NUM]);
@@ -616,6 +620,10 @@ function parseOrders(rows) {
     const leatherColor = C_LEATHER >= 0 ? str(row[C_LEATHER]) : '';
     const numColor     = C_NUMCOL  >= 0 ? str(row[C_NUMCOL])  : '';
     const invoice      = C_INV     >= 0 ? str(row[C_INV])     : '';
+    // 차수 마커 감지 → 섹션 내 전파
+    const rowBatch = detectBatch(invoice);
+    if (rowBatch) sectionBatch = rowBatch;
+    const batch = sectionBatch;
 
     if (!no && !name) {
       if (!last) continue;
@@ -625,11 +633,10 @@ function parseOrders(rows) {
       if (hasDistinctData) {
         const skip2        = !num || note.includes('확인중');
         const productType2 = detectProductType(leatherColor, num);
-        const batch2       = detectBatch(invoice);
         const o2 = {
           no: '', name: last.name, num, note, row, headers, count: 1, skip: skip2,
           skipReason: skip2 ? (note.includes('확인중') ? '확인중' : '숫자없음') : '',
-          leatherColor, numColor, invoice, productType: productType2, batch: batch2,
+          leatherColor, numColor, invoice, productType: productType2, batch,
           multiType: 'single', groupLabel: ''
         };
         orders.push(o2);
@@ -645,7 +652,7 @@ function parseOrders(rows) {
           row, headers: last.headers, count: 1, skip: skip3,
           skipReason: skip3 ? ((noteForDup || '').includes('확인중') ? '확인중' : '숫자없음') : '',
           leatherColor: last.leatherColor, numColor: last.numColor, invoice: last.invoice,
-          productType: last.productType, batch: last.batch,
+          productType: last.productType, batch,
           multiType: 'single', groupLabel: ''
         };
         orders.push(o3);
@@ -657,7 +664,6 @@ function parseOrders(rows) {
 
     const skip        = !num || note.includes('확인중');
     const productType = detectProductType(leatherColor, num);
-    const batch       = detectBatch(invoice);
 
     const o = {
       no, name, num, note, row, headers, count: 1, skip,
@@ -727,7 +733,13 @@ function renderSheetTabs() {
     const tab = document.createElement('button');
     tab.className = 'sheet-tab';
     tab.textContent = name;
-    tab.onclick = () => { doStop(); loadSheet(name); };
+    tab.onclick = () => {
+      doStop();
+      loadSheet(name);
+      if (currentMode === 'make')  renderMakeBatchTabs();
+      if (currentMode === 'check') renderCheckBatchTabs();
+      if (currentMode === 'pack')  renderPackBatchTabs();
+    };
     sheetTabs.appendChild(tab);
   });
 }
@@ -746,7 +758,7 @@ function enterMode(mode) {
   checkHeader.style.display   = mode === 'check' ? 'block' : 'none';
   packHeader.style.display    = mode === 'pack'  ? 'block' : 'none';
   headerSub.textContent       = { make: '제작', check: '검수', pack: '포장' }[mode] || mode;
-  if (mode === 'make')  renderBatchBadges();
+  if (mode === 'make')  renderMakeBatchTabs();
   if (mode === 'check') { checkCat = 'all'; renderCheckBatchTabs(); }
   if (mode === 'pack')  { packCat = 'all'; renderPackBatchTabs(); }
   document.querySelectorAll('.cat-tab').forEach(t => t.classList.toggle('active', t.dataset.cat === 'all'));
@@ -781,12 +793,32 @@ function setCat(cat) {
   setUIState('idle');
 }
 
-function renderBatchBadges() {
+function renderMakeBatchTabs() {
   const orders = groupedOrders[currentSheet] || [];
-  const batches = [...new Set(orders.map(o => o.batch).filter(Boolean))];
-  makeBatchBadges.innerHTML = batches.length
-    ? batches.map(b => `<span class="badge badge-batch">${b} 추가주문 포함</span>`).join('')
-    : '<span class="badge badge-other">1차 주문</span>';
+  const batchSet = new Set();
+  orders.forEach(o => batchSet.add(o.batch || '1차'));
+  const batches = [...batchSet].sort((a, b) => parseInt(a) - parseInt(b));
+  const tabs = $('makeBatchTabs');
+  if (!tabs) return;
+  tabs.innerHTML = [
+    `<button class="cat-tab active" data-batch="all" onclick="setMakeBatch('all')">전체</button>`,
+    ...batches.map(b =>
+      `<button class="cat-tab" data-batch="${b}" onclick="setMakeBatch('${b}')">${b}</button>`)
+  ].join('');
+}
+
+function setMakeBatch(batch) {
+  currentBatch = batch;
+  document.querySelectorAll('#makeBatchTabs .cat-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.batch === batch)
+  );
+  doStop();
+  loadSheet(currentSheet);
+  setUIState('idle');
+}
+
+function renderBatchBadges() {
+  // (기존 호환 유지용 - renderMakeBatchTabs로 대체)
 }
 
 function renderCheckBatchTabs() {
@@ -887,8 +919,8 @@ function loadSheet(name) {
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
   }
-  // 검수·포장 모드: 차수 필터 적용
-  if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
+  // 전체 모드: 차수 필터 적용
+  if (currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
   // 포장 모드: 제품 종류 필터 적용
@@ -965,7 +997,7 @@ function buildTexts() {
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
   }
-  if ((currentMode === 'check' || currentMode === 'pack') && currentBatch !== 'all') {
+  if (currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
   if (currentMode === 'pack' && packCat !== 'all') {
