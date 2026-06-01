@@ -337,7 +337,6 @@
       </div>
       <div class="read-mode-tabs">
         <button class="read-mode-btn active" data-mode="leather"   onclick="setReadMode('leather')">가죽</button>
-        <button class="read-mode-btn"        data-mode="numColor" onclick="setReadMode('numColor')">숫자색상</button>
         <button class="read-mode-btn"        data-mode="num"      onclick="setReadMode('num')">번호</button>
         <button class="read-mode-btn"        data-mode="plate1"   onclick="setReadMode('plate1')">플레이트 1</button>
         <button class="read-mode-btn"        data-mode="plate2"   onclick="setReadMode('plate2')">플레이트 2</button>
@@ -1000,12 +999,11 @@ function buildTexts() {
       if (label) parts.push(label);
 
       if (makeReadMode === 'leather') {
-        if (leather) parts.push(leather);
-        if (isPlateMulti) parts.push(nativeCount(o.count));
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 });
-      } else if (makeReadMode === 'numColor') {
+        // 가죽 모드: 가죽컬러 → 숫자색상 → '-' 앞 번호 prefix (낱자) → (플레이트 다중)
         if (leather)    parts.push(leather);
         if (o.numColor) parts.push(o.numColor);
+        const prefix = (o.num || '').split('-')[0].trim().replace(/\D/g, '');
+        if (prefix) parts.push(prefix.split('').map(c => DIGIT[+c]).join(', '));
         if (isPlateMulti) parts.push(nativeCount(o.count));
         result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 });
       } else if (makeReadMode === 'plate1') {
@@ -1067,21 +1065,6 @@ function buildTexts() {
         });
         groups.forEach(({ key, count, firstIdx, idxs }) => {
           result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 1956 });
-        });
-      } else if (makeReadMode === 'numColor') {
-        const groups = new Map();
-        others.forEach(({ o, idx }) => {
-          const leather = leatherOf(o);
-          const mapKey = (leather || '') + '|' + (o.numColor || '');
-          if (!groups.has(mapKey)) {
-            const text = [leather, o.numColor].filter(Boolean).join(', ') || '(정보 없음)';
-            groups.set(mapKey, { text, count: 0, firstIdx: idx, idxs: [] });
-          }
-          const g = groups.get(mapKey);
-          g.count++; g.idxs.push(idx);
-        });
-        groups.forEach(({ text, count, firstIdx, idxs }) => {
-          result.push({ text: `${text} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 1956 });
         });
       } else {
         // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
