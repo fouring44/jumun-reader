@@ -1040,12 +1040,19 @@ function buildTexts() {
         if (o.numColor) parts.push(o.numColor);
         const beforeLen = result.length;
         if (parts.length) result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 300 });
-        const digits = (o.num || '').replace(/\D/g, '').split('').filter(Boolean);
-        digits.forEach((d, i) => {
+        const numStr = o.num || '';
+        const firstDash = numStr.indexOf('-');
+        const prefixDigits = (firstDash >= 0 ? numStr.slice(0, firstDash) : numStr).replace(/\D/g, '').split('').filter(Boolean);
+        const suffixDigits = (firstDash >= 0 ? numStr.slice(firstDash + 1) : '').replace(/\D/g, '').split('').filter(Boolean);
+        const allDigitParts = [
+          ...prefixDigits.map(d => ({ d, isPrefix: true })),
+          ...suffixDigits.map(d => ({ d, isPrefix: false }))
+        ];
+        allDigitParts.forEach(({ d, isPrefix }, i) => {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digits.length - 1 ? 3000 : 1956,
+            postDelay: i < allDigitParts.length - 1 ? (isPrefix ? 1800 : 3000) : 1956,
             numRate: true
           });
         });
