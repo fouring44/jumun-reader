@@ -1193,6 +1193,7 @@ function speakAt(idx, session) {
   // 세션이 만료됐으면(일시정지/정지/필터 변경 등) 아무것도 하지 않음
   if (session !== playSession) return;
   if (idx >= utterances.length) {
+    clearSelection();
     setUIState('idle');
     statusText.textContent = '✅ 읽기 완료';
     return;
@@ -1277,7 +1278,7 @@ pauseBtn.addEventListener('click', () => {
 });
 
 stopBtn.addEventListener('click', doStop);
-function doStop() { window.speechSynthesis.cancel(); setUIState('idle'); }
+function doStop() { window.speechSynthesis.cancel(); clearSelection(); setUIState('idle'); }
 
 function selectRow(orderIdx) {
   if (selectedOrderIdx === orderIdx) { clearSelection(); statusText.textContent = '선택 해제됨'; return; }
