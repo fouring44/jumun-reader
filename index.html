@@ -1099,8 +1099,9 @@ function buildTexts() {
     let prevLbl = null;
     return validPairs.map(({ o, idx }, vi) => {
       const parts = [o.name];
-      if (multiStart.has(vi)) parts.push(`${multiStart.get(vi)}개주문입니다`);
-      if (o.multiType === 'set') parts.push('세트');
+      if (multiStart.has(vi)) {
+        parts.push(o.multiType === 'set' ? '세트상품입니다' : `${multiStart.get(vi)}개주문입니다`);
+      }
       const lbl = getProductLabel(o);
       if (lbl !== prevLbl) parts.push(lbl);
       prevLbl = lbl;
