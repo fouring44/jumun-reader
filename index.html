@@ -336,10 +336,9 @@
         <button class="cat-tab"        data-cat="other"   onclick="setCat('other')">기타</button>
       </div>
       <div class="read-mode-tabs">
-        <button class="read-mode-btn active" data-mode="leather"   onclick="setReadMode('leather')">가죽</button>
-        <button class="read-mode-btn"        data-mode="num"      onclick="setReadMode('num')">번호</button>
-        <button class="read-mode-btn"        data-mode="plate1"   onclick="setReadMode('plate1')">플레이트 1</button>
-        <button class="read-mode-btn"        data-mode="plate2"   onclick="setReadMode('plate2')">플레이트 2</button>
+        <button class="read-mode-btn active" data-mode="leatherNum" onclick="setReadMode('leatherNum')">가죽+번호</button>
+        <button class="read-mode-btn"        data-mode="plate1"    onclick="setReadMode('plate1')">플레이트 1</button>
+        <button class="read-mode-btn"        data-mode="plate2"    onclick="setReadMode('plate2')">플레이트 2</button>
       </div>
     </div>
 
@@ -428,7 +427,7 @@
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
 let utterances = [], currentIdx = 0, ttsState = 'idle', selectedOrderIdx = null, playSession = 0;
-let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all', checkCat = 'all';
+let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leatherNum', packCat = 'all', checkCat = 'all';
 
 // ═══════════════════════════════════════════════
 //  DOM
@@ -740,7 +739,7 @@ function enterMode(mode) {
   currentMode   = mode;
   currentCat    = 'all';
   currentBatch  = 'all';
-  makeReadMode  = 'leather';
+  makeReadMode  = 'leatherNum';
   modeSelectEl.style.display  = 'none';
   activeContent.style.display = 'block';
   makeHeader.style.display    = mode === 'make'  ? 'block' : 'none';
@@ -766,7 +765,7 @@ function goBack() {
   currentMode   = null;
   currentCat    = 'all';
   currentBatch  = 'all';
-  makeReadMode  = 'leather';
+  makeReadMode  = 'leatherNum';
   packCat       = 'all';
   checkCat      = 'all';
   activeContent.style.display = 'none';
@@ -995,17 +994,48 @@ function buildTexts() {
       const leather = leatherOf(o);
       const isPlateMulti = o.productType === 'plate' && o.count > 1;
       const label = speakLabel(o);
-      const parts = [];
-      if (label) parts.push(label);
 
-      if (makeReadMode === 'leather') {
-        // 가죽 모드: 가죽컬러 → 숫자색상 → '-' 앞 번호 prefix (낱자) → (플레이트 다중)
-        if (leather)    parts.push(leather);
-        if (o.numColor) parts.push(o.numColor);
-        const prefix = (o.num || '').split('-')[0].trim().replace(/\D/g, '');
-        if (prefix) parts.push(prefix.split('').map(c => DIGIT[+c]).join(', '));
-        if (isPlateMulti) parts.push(nativeCount(o.count));
-        result.push({ text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 });
+      if (makeReadMode === 'leatherNum') {
+        // 가죽+번호 모드: 가죽종류(1.3s) → 숫자컬러(1.3s) → 숫자 낱자(3s간격) → 행간(2s)
+        const digitList = (o.num || '').replace(/\D/g, '').split('').filter(Boolean);
+        const hasDigits  = digitList.length > 0;
+        const hasNumColor = !!o.numColor;
+
+        // ① 가죽종류 (+ label, + 수량)
+        const firstParts = [];
+        if (label)        firstParts.push(label);
+        if (leather)      firstParts.push(leather);
+        if (isPlateMulti) firstParts.push(nativeCount(o.count));
+        if (firstParts.length) {
+          result.push({
+            text: firstParts.join(', '),
+            orderIdx: idx,
+            postDelay: (hasNumColor || hasDigits) ? 1300 : 2000
+          });
+        }
+
+        // ② 숫자컬러
+        if (hasNumColor) {
+          result.push({
+            text: o.numColor,
+            orderIdx: idx,
+            postDelay: hasDigits ? 1300 : 2000
+          });
+        }
+
+        // ③ 숫자 낱자
+        digitList.forEach((d, i) => {
+          result.push({
+            text: DIGIT[parseInt(d)],
+            orderIdx: idx,
+            postDelay: i < digitList.length - 1 ? 3000 : 2000,
+            numRate: true
+          });
+        });
+
+        if (!firstParts.length && !hasNumColor && !hasDigits) {
+          result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: 2000 });
+        }
       } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
@@ -1034,74 +1064,21 @@ function buildTexts() {
         });
         if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 1956 });
         if (!firstParts.length && !digits.length) result.push({ text: '(정보 없음)', orderIdx: idx });
-      } else {
-        // 번호 모드: 낱자 읽기
-        if (leather)    parts.push(leather);
-        if (o.numColor) parts.push(o.numColor);
-        const beforeLen = result.length;
-        if (parts.length) result.push({ text: parts.join(', '), orderIdx: idx, postDelay: 300 });
-        const numStr = o.num || '';
-        const firstDash = numStr.indexOf('-');
-        const prefixDigits = (firstDash >= 0 ? numStr.slice(0, firstDash) : numStr).replace(/\D/g, '').split('').filter(Boolean);
-        const suffixDigits = (firstDash >= 0 ? numStr.slice(firstDash + 1) : '').replace(/\D/g, '').split('').filter(Boolean);
-        const allDigitParts = [
-          ...prefixDigits.map(d => ({ d, isPrefix: true })),
-          ...suffixDigits.map(d => ({ d, isPrefix: false }))
-        ];
-        allDigitParts.forEach(({ d, isPrefix }, i) => {
-          result.push({
-            text: DIGIT[parseInt(d)],
-            orderIdx: idx,
-            postDelay: i < allDigitParts.length - 1 ? (isPrefix ? 1800 : 3000) : 1956,
-            numRate: true
-          });
-        });
-        if (result.length === beforeLen) result.push({ text: '(번호 없음)', orderIdx: idx });
       }
     });
 
-    // 기타 상품: 묶어서 건수 읽기 (플레이트 모드 제외)
-    if (others.length && makeReadMode !== 'plate1' && makeReadMode !== 'plate2') {
-      if (makeReadMode === 'leather') {
-        const groups = new Map();
-        others.forEach(({ o, idx }) => {
-          const key = leatherOf(o) || '(정보 없음)';
-          if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx, idxs: [] });
-          const g = groups.get(key);
-          g.count++; g.idxs.push(idx);
-        });
-        groups.forEach(({ key, count, firstIdx, idxs }) => {
-          result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 1956 });
-        });
-      } else {
-        // 번호 모드: 가죽+숫자색상별로 묶어 개입수·건수 읽기
-        const numGroups = new Map();
-        others.forEach(({ o, idx }) => {
-          const leather = leatherOf(o) || '(정보 없음)';
-          const groupKey = leather + '|' + (o.numColor || '');
-          if (!numGroups.has(groupKey)) {
-            const label = [leather, o.numColor].filter(Boolean).join(', ');
-            numGroups.set(groupKey, { label, numMap: new Map(), firstIdx: idx, idxs: [] });
-          }
-          const lg = numGroups.get(groupKey);
-          lg.numMap.set(o.num || '', (lg.numMap.get(o.num || '') || 0) + 1);
-          lg.idxs.push(idx);
-        });
-        numGroups.forEach(({ label, numMap, firstIdx, idxs }) => {
-          const entries = [...numMap.entries()];
-          let text;
-          if (entries.length === 1) {
-            const [num, count] = entries[0];
-            text = num ? `${label} ${num}개입 ${count}건입니다` : `${label} ${count}건입니다`;
-          } else {
-            const parts = entries.map(([num, count]) =>
-              num ? `${num}개입 ${count}건` : `${count}건`
-            );
-            text = `${label} ${parts.join(', ')}입니다`;
-          }
-          result.push({ text, orderIdx: firstIdx, idxs, postDelay: 1956 });
-        });
-      }
+    // 기타 상품: 가죽종류별로 묶어 건수 읽기 (가죽+번호 모드만, 플레이트 모드 제외)
+    if (others.length && makeReadMode === 'leatherNum') {
+      const groups = new Map();
+      others.forEach(({ o, idx }) => {
+        const key = leatherOf(o) || '(정보 없음)';
+        if (!groups.has(key)) groups.set(key, { key, count: 0, firstIdx: idx, idxs: [] });
+        const g = groups.get(key);
+        g.count++; g.idxs.push(idx);
+      });
+      groups.forEach(({ key, count, firstIdx, idxs }) => {
+        result.push({ text: `${key} ${count}건입니다`, orderIdx: firstIdx, idxs, postDelay: 2000 });
+      });
     }
 
     return result;
