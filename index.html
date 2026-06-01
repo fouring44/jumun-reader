@@ -1086,9 +1086,20 @@ function buildTexts() {
 
   // 포장 모드: 모든 주문 개별 읽기 (각 행을 별도로 읽음, 'N개 구매' 안내 없음)
   if (currentMode === 'pack') {
+    // 연속 동일이름 그룹 탐지 → 첫 항목에 'N개주문입니다' 삽입
+    const multiStart = new Map(); // validPairs 인덱스 → 연속 개수
+    let gi = 0;
+    while (gi < validPairs.length) {
+      let j = gi + 1;
+      while (j < validPairs.length && validPairs[j].o.name === validPairs[gi].o.name) j++;
+      if (j - gi >= 2) multiStart.set(gi, j - gi);
+      gi = j;
+    }
+
     let prevLbl = null;
-    return validPairs.map(({ o, idx }) => {
+    return validPairs.map(({ o, idx }, vi) => {
       const parts = [o.name];
+      if (multiStart.has(vi)) parts.push(`${multiStart.get(vi)}개주문입니다`);
       if (o.multiType === 'set') parts.push('세트');
       const lbl = getProductLabel(o);
       if (lbl !== prevLbl) parts.push(lbl);
