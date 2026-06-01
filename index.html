@@ -427,7 +427,7 @@
 //  상태
 // ═══════════════════════════════════════════════
 let workbook = null, rawSheets = {}, groupedOrders = {}, currentSheet = '';
-let utterances = [], currentIdx = 0, ttsState = 'idle', selectedOrderIdx = null;
+let utterances = [], currentIdx = 0, ttsState = 'idle', selectedOrderIdx = null, playSession = 0;
 let currentMode = null, currentCat = 'all', currentBatch = 'all', makeReadMode = 'leather', packCat = 'all', checkCat = 'all';
 
 // ═══════════════════════════════════════════════
@@ -487,7 +487,7 @@ document.addEventListener('keydown', e => {
     statusText.textContent = `⏸ ${currentIdx + 1} / ${utterances.length}건에서 일시정지`;
   } else if (ttsState === 'paused') {
     setUIState('speaking');
-    speakAt(currentIdx);
+    speakAt(currentIdx, playSession);
   }
 });
 
@@ -1152,6 +1152,7 @@ function buildTexts() {
 // ═══════════════════════════════════════════════
 function setUIState(state) {
   ttsState = state;
+  playSession++;  // 모든 상태 전환 시 세션 토큰 갱신 → 이전 utterance의 stale 콜백 무효화
   if (state === 'idle') {
     playBtn.textContent = '▶ 읽기 시작';
     playBtn.className = 'btn btn-play';
@@ -1188,7 +1189,9 @@ function highlightRow(orderIdx) {
 // ═══════════════════════════════════════════════
 //  TTS 재생
 // ═══════════════════════════════════════════════
-function speakAt(idx) {
+function speakAt(idx, session) {
+  // 세션이 만료됐으면(일시정지/정지/필터 변경 등) 아무것도 하지 않음
+  if (session !== playSession) return;
   if (idx >= utterances.length) {
     setUIState('idle');
     statusText.textContent = '✅ 읽기 완료';
@@ -1210,10 +1213,16 @@ function speakAt(idx) {
   const sel = voiceSelect.value;
   if (sel) { const v = window.speechSynthesis.getVoices().find(v => v.name === sel); if (v) u.voice = v; }
   u.onend   = () => {
-    if (ttsState !== 'speaking') return;
-    setTimeout(() => { if (ttsState === 'speaking') speakAt(idx + 1); }, postDelay);
+    if (session !== playSession || ttsState !== 'speaking') return;
+    setTimeout(() => {
+      if (session !== playSession || ttsState !== 'speaking') return;
+      speakAt(idx + 1, session);
+    }, postDelay);
   };
-  u.onerror = e => { if (e.error === 'interrupted') return; if (ttsState === 'speaking') speakAt(idx + 1); };
+  u.onerror = e => {
+    if (session !== playSession || ttsState !== 'speaking' || e.error === 'interrupted') return;
+    speakAt(idx + 1, session);
+  };
   window.speechSynthesis.speak(u);
 }
 
@@ -1241,7 +1250,7 @@ playBtn.addEventListener('click', () => {
     }
     currentIdx = resumeIdx;
     window.speechSynthesis.cancel();
-    setUIState('speaking'); speakAt(resumeIdx);
+    setUIState('speaking'); speakAt(resumeIdx, playSession);
   } else {
     utterances = buildTexts();
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
@@ -1256,7 +1265,7 @@ playBtn.addEventListener('click', () => {
     }
     currentIdx = startIdx;
     window.speechSynthesis.cancel();
-    setUIState('speaking'); speakAt(startIdx);
+    setUIState('speaking'); speakAt(startIdx, playSession);
   }
 });
 
