@@ -1010,7 +1010,7 @@ function buildTexts() {
           result.push({
             text: firstParts.join(', '),
             orderIdx: idx,
-            postDelay: (hasNumColor || hasDigits) ? 1300 : 2000
+            postDelay: (hasNumColor || hasDigits) ? 1300 : 3000
           });
         }
 
@@ -1019,7 +1019,7 @@ function buildTexts() {
           result.push({
             text: o.numColor,
             orderIdx: idx,
-            postDelay: hasDigits ? 1300 : 2000
+            postDelay: hasDigits ? 1300 : 3000
           });
         }
 
@@ -1028,13 +1028,13 @@ function buildTexts() {
           result.push({
             text: DIGIT[parseInt(d)],
             orderIdx: idx,
-            postDelay: i < digitList.length - 1 ? 3000 : 2000,
+            postDelay: i < digitList.length - 1 ? 3000 : 3000,
             numRate: true
           });
         });
 
         if (!firstParts.length && !hasNumColor && !hasDigits) {
-          result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: 2000 });
+          result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: 3000 });
         }
       } else if (makeReadMode === 'plate1') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
