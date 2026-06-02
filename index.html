@@ -340,6 +340,7 @@
         <button class="read-mode-btn active" data-mode="leatherNum" onclick="setReadMode('leatherNum')">가죽+번호</button>
         <button class="read-mode-btn"        data-mode="plate1"    onclick="setReadMode('plate1')">플레이트 1</button>
         <button class="read-mode-btn"        data-mode="plate2"    onclick="setReadMode('plate2')">플레이트 2</button>
+        <button class="read-mode-btn"        data-mode="sleeve"    onclick="setReadMode('sleeve')">슬리브</button>
       </div>
     </div>
 
@@ -837,11 +838,22 @@ function renderCheckBatchTabs() {
 }
 
 function setReadMode(mode) {
+  const prevMode = makeReadMode;
   makeReadMode = mode;
   document.querySelectorAll('.read-mode-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.mode === mode)
   );
+  // 슬리브 탭 전환 시 '기타' 카테고리 탭 숨김/표시
+  const otherTab = document.querySelector('#catTabs .cat-tab[data-cat="other"]');
+  if (otherTab) otherTab.style.display = (mode === 'sleeve') ? 'none' : '';
+  if (mode === 'sleeve' && currentCat === 'other') {
+    currentCat = 'all';
+    document.querySelectorAll('#catTabs .cat-tab').forEach(t =>
+      t.classList.toggle('active', t.dataset.cat === 'all'));
+  }
   doStop();
+  // 슬리브 진입·이탈 시 테이블 필터 갱신
+  if (mode === 'sleeve' || prevMode === 'sleeve') loadSheet(currentSheet);
   setUIState('idle');
 }
 
@@ -918,6 +930,12 @@ function loadSheet(name) {
     orders = currentCat === 'set'
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
+  }
+  // 슬리브 모드: 번호판·키링·세트만 표시
+  if (currentMode === 'make' && makeReadMode === 'sleeve') {
+    orders = orders.filter(o =>
+      o.productType === 'plate' || o.productType === 'keyring' || o.multiType === 'set'
+    );
   }
   // 전체 모드: 차수 필터 적용
   if (currentBatch !== 'all') {
@@ -997,6 +1015,12 @@ function buildTexts() {
       ? orders.filter(o => o.multiType === 'set')
       : orders.filter(o => o.productType === currentCat);
   }
+  // 슬리브 모드: 번호판·키링·세트만 읽기 (loadSheet와 idx 일치 유지)
+  if (currentMode === 'make' && makeReadMode === 'sleeve') {
+    orders = orders.filter(o =>
+      o.productType === 'plate' || o.productType === 'keyring' || o.multiType === 'set'
+    );
+  }
   if (currentBatch !== 'all') {
     orders = orders.filter(o => (o.batch || '1차') === currentBatch);
   }
@@ -1017,6 +1041,46 @@ function buildTexts() {
     const nonOther = validPairs.filter(({ o }) => o.productType !== 'other');
     const others   = validPairs.filter(({ o }) => o.productType === 'other');
     const result   = [];
+
+    // 슬리브 모드 사전 계산: 주차번호판 자릿수(4 vs 8), 세트 페어링
+    let plateDigitCount = new Map(); // idx → 4 or 8
+    let setFirstMap = new Map();     // first idx → { keyringDigits, plateDigits }
+    let setSkipSet  = new Set();     // second idx (건너뜀)
+    if (makeReadMode === 'sleeve') {
+      // ① 같은 주문자가 주차번호판을 2개 이상 구매한 경우: 뒤4자리가 모두 같으면 8자리, 모두 동일하면 4자리
+      const personPlates = new Map();
+      nonOther.forEach(({ o, idx }) => {
+        if (o.productType !== 'plate' || o.multiType === 'set') return;
+        const full = (o.num || '').replace(/\D/g, '');
+        if (!personPlates.has(o.name)) personPlates.set(o.name, []);
+        personPlates.get(o.name).push({ idx, last4: full.slice(-4), full });
+      });
+      personPlates.forEach(list => {
+        if (list.length < 2) { list.forEach(p => plateDigitCount.set(p.idx, 4)); return; }
+        const same4    = list.every(p => p.last4 === list[0].last4);
+        const sameFull = list.every(p => p.full  === list[0].full);
+        list.forEach(p => plateDigitCount.set(p.idx, (same4 && !sameFull) ? 8 : 4));
+      });
+      // ② 세트(주차번호판+키링 동일인) 페어링
+      const setPersons = new Map();
+      nonOther.forEach(({ o, idx }) => {
+        if (o.multiType !== 'set') return;
+        if (!setPersons.has(o.name)) setPersons.set(o.name, []);
+        setPersons.get(o.name).push({ o, idx });
+      });
+      setPersons.forEach(members => {
+        const plate   = members.find(m => m.o.productType === 'plate');
+        const keyring = members.find(m => m.o.productType === 'keyring');
+        if (!plate || !keyring) return;
+        const first  = plate.idx < keyring.idx ? plate : keyring;
+        const second = plate.idx < keyring.idx ? keyring : plate;
+        setFirstMap.set(first.idx, {
+          keyringDigits: (keyring.o.num || '').replace(/\D/g, '').slice(0, 4),
+          plateDigits:   (plate.o.num  || '').replace(/\D/g, '').slice(-4)
+        });
+        setSkipSet.add(second.idx);
+      });
+    }
 
     // 주차번호판·키링: 기존 낱개 읽기
     // 동일색상 동일번호 중복은 별도 행으로 분리되므로 groupLabel('동일색상 동일번호') 발음 생략, '세트'만 발음
@@ -1096,6 +1160,39 @@ function buildTexts() {
         });
         if (colorPart) result.push({ text: colorPart + ' 플레이트', orderIdx: idx, postDelay: 1956 });
         if (!firstParts.length && !digits.length) result.push({ text: '(정보 없음)', orderIdx: idx });
+      } else if (makeReadMode === 'sleeve') {
+        // 슬리브 모드: 키링=전체숫자, 세트='키링 OOOO / 주차번호 OOOO', 주차번호판=뒤4자리(동일뒤4→8자리)
+        if (o.productType !== 'plate' && o.productType !== 'keyring') return;
+        if (setSkipSet.has(idx)) return;
+        const sleeveGap = Math.round(1956 * 1.3); // ≈2543ms (플레이트 행간 * 1.3)
+        const dGap = 309;
+        if (setFirstMap.has(idx)) {
+          // 세트: '키링 OOOO', '주차번호 OOOO' 순으로 읽기
+          const { keyringDigits, plateDigits } = setFirstMap.get(idx);
+          result.push({ text: '키링', orderIdx: idx, postDelay: dGap });
+          [...keyringDigits].forEach(d =>
+            result.push({ text: DIGIT[+d], orderIdx: idx, postDelay: dGap, numRate2: true })
+          );
+          result.push({ text: '주차번호', orderIdx: idx, postDelay: dGap });
+          [...plateDigits].forEach((d, i, arr) =>
+            result.push({ text: DIGIT[+d], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
+          );
+        } else if (o.productType === 'keyring') {
+          // 키링 단독: 전체 숫자
+          const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
+          [...d].forEach((ch, i, arr) =>
+            result.push({ text: DIGIT[+ch], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
+          );
+          if (!d.length) result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: sleeveGap });
+        } else if (o.productType === 'plate') {
+          // 주차번호판 단독: 뒤4자리 (또는 8자리)
+          const numD = plateDigitCount.get(idx) || 4;
+          const d = (o.num || '').replace(/\D/g, '').slice(-numD);
+          [...d].forEach((ch, i, arr) =>
+            result.push({ text: DIGIT[+ch], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
+          );
+          if (!d.length) result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: sleeveGap });
+        }
       }
     });
 
