@@ -163,6 +163,7 @@
   .badge-keyring { background: #e8d4ff; color: #5a1a8a; }
   .badge-other   { background: var(--bg3); color: var(--text2); }
   .badge-batch   { background: #fff3cd; color: #856404; }
+  .badge-sleeve-msg { background: var(--yellow-light); color: var(--amber); }
 
   /* ── 컨트롤 패널 ── */
   .panel {
@@ -525,6 +526,16 @@ function detectBatch(invoiceText) {
 }
 
 // ═══════════════════════════════════════════════
+//  슬리브 축하/감사 감지 (키링 전용 표시·읽기)
+// ═══════════════════════════════════════════════
+function detectSleeveMsg(sleeve) {
+  if (!sleeve) return '';
+  if (sleeve.includes('축하')) return '축하';
+  if (sleeve.includes('감사')) return '감사';
+  return '';
+}
+
+// ═══════════════════════════════════════════════
 //  한 사람의 복수 주문 관계 분석
 //  multiType 종류:
 //  'single'           : 단독 주문
@@ -604,6 +615,7 @@ function parseOrders(rows) {
   const C_LEATHER = colMap['가죽컬러'] ?? -1;
   const C_NUMCOL  = colMap['숫자컬러'] ?? -1;
   const C_INV     = colMap['송장']     ?? -1;
+  const C_SLEEVE  = colMap['슬리브']   ?? -1;
   const headers   = rows[hi].map(str);
   const orders = []; let last = null, blankRunLen = 0, sectionBatch = null;
 
@@ -621,6 +633,8 @@ function parseOrders(rows) {
     const leatherColor = C_LEATHER >= 0 ? str(row[C_LEATHER]) : '';
     const numColor     = C_NUMCOL  >= 0 ? str(row[C_NUMCOL])  : '';
     const invoice      = C_INV     >= 0 ? str(row[C_INV])     : '';
+    const sleeve       = C_SLEEVE  >= 0 ? str(row[C_SLEEVE])  : '';
+    const sleeveMsg    = detectSleeveMsg(sleeve);
     // 차수 마커 감지 → 섹션 내 전파
     const rowBatch = detectBatch(invoice);
     if (rowBatch) sectionBatch = rowBatch;
@@ -638,6 +652,7 @@ function parseOrders(rows) {
           no: '', name: last.name, num, note, row, headers, count: 1, skip: skip2,
           skipReason: skip2 ? (note.includes('확인중') ? '확인중' : '숫자없음') : '',
           leatherColor, numColor, invoice, productType: productType2, batch,
+          sleeve, sleeveMsg,
           multiType: 'single', groupLabel: ''
         };
         orders.push(o2);
@@ -654,6 +669,7 @@ function parseOrders(rows) {
           skipReason: skip3 ? ((noteForDup || '').includes('확인중') ? '확인중' : '숫자없음') : '',
           leatherColor: last.leatherColor, numColor: last.numColor, invoice: last.invoice,
           productType: last.productType, batch,
+          sleeve, sleeveMsg,
           multiType: 'single', groupLabel: ''
         };
         orders.push(o3);
@@ -670,6 +686,7 @@ function parseOrders(rows) {
       no, name, num, note, row, headers, count: 1, skip,
       skipReason: skip ? (note.includes('확인중') ? '확인중' : '숫자없음') : '',
       leatherColor, numColor, invoice, productType, batch,
+      sleeve, sleeveMsg,
       multiType: 'single', groupLabel: ''
     };
     orders.push(o);
@@ -982,7 +999,12 @@ function loadSheet(name) {
     const batchNum = o.batch ? parseInt(o.batch) : 1;
     const batchLabel = o.batch || '1차';
     const batchClass = `batch-cell batch-${Math.min(batchNum, 4)}`;
-    tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${o.note}</td><td>${badge}</td>`;
+    // 제작 모드 키링: 슬리브 축하/감사를 비고 칸에 배지로 표시
+    let noteCell = o.note;
+    if (currentMode === 'make' && o.productType === 'keyring' && o.sleeveMsg) {
+      noteCell += ` <span class="badge badge-sleeve-msg">${o.sleeveMsg}</span>`;
+    }
+    tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${noteCell}</td><td>${badge}</td>`;
     if (!o.skip) {
       tr.style.cursor = 'pointer';
       tr.title = '클릭하여 선택 후 ▶ 읽기 시작을 누르세요';
@@ -1093,7 +1115,9 @@ function buildTexts() {
 
       if (makeReadMode === 'leatherNum') {
         // 가죽+번호 모드: 가죽종류(1.3s) → 숫자컬러(1.3s) → 숫자 낱자(3s간격) → 행간(2s)
-        const digitList = (o.num || '').replace(/\D/g, '').split('').filter(Boolean);
+        // 키링은 각인번호 4자리만(수량 -N개 제외), 주차번호판은 안심번호 전체를 읽음
+        const allDigits = (o.num || '').replace(/\D/g, '');
+        const digitList = (o.productType === 'keyring' ? allDigits.slice(0, 4) : allDigits).split('').filter(Boolean);
         const hasDigits  = digitList.length > 0;
         const hasNumColor = !!o.numColor;
 
@@ -1128,6 +1152,11 @@ function buildTexts() {
             numRate: true
           });
         });
+
+        // ④ 키링 슬리브 축하/감사 (낱자 다 읽은 뒤 한 번 더)
+        if (o.productType === 'keyring' && o.sleeveMsg) {
+          result.push({ text: o.sleeveMsg, orderIdx: idx, postDelay: 3000 });
+        }
 
         if (!firstParts.length && !hasNumColor && !hasDigits) {
           result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: 3000 });
