@@ -1214,7 +1214,11 @@ function buildTexts() {
             result.push({ text: DIGIT[+d], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
           );
         } else if (o.productType === 'keyring') {
-          // 키링 단독: 전체 숫자
+          // 키링 단독: 종류 변경 시 "키링" 안내 후 전체 숫자
+          if (prevProductType !== 'keyring') {
+            result.push({ text: '키링', orderIdx: idx, postDelay: dGap });
+          }
+          prevProductType = 'keyring';
           const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
           [...d].forEach((ch, i, arr) =>
             result.push({ text: DIGIT[+ch], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
