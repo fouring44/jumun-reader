@@ -1108,12 +1108,19 @@ function buildTexts() {
     // 동일색상 동일번호 중복은 별도 행으로 분리되므로 groupLabel('동일색상 동일번호') 발음 생략, '세트'만 발음
     const nativeCount = n => (n > 0 && n < NATIVE.length ? NATIVE[n] : String(n)) + '개';
     const speakLabel  = o => o.multiType === 'same_option' ? '' : o.groupLabel;
+    let prevProductType = null;
     nonOther.forEach(({ o, idx }) => {
       const leather = leatherOf(o);
       const isPlateMulti = o.productType === 'plate' && o.count > 1;
       const label = speakLabel(o);
 
       if (makeReadMode === 'leatherNum') {
+        // 제품 종류가 바뀔 때 종류명 먼저 안내
+        if (o.productType !== prevProductType) {
+          const typeLabel = o.productType === 'plate' ? '주차번호판' : o.productType === 'keyring' ? '키링' : null;
+          if (typeLabel) result.push({ text: typeLabel, orderIdx: idx, postDelay: 1500 });
+          prevProductType = o.productType;
+        }
         // 가죽+번호 모드: 가죽종류(1.3s) → 숫자컬러(1.3s) → 숫자 낱자(3s간격) → 행간(2s)
         // 키링은 각인번호 4자리만(수량 -N개 제외), 주차번호판은 안심번호 전체를 읽음
         const allDigits = (o.num || '').replace(/\D/g, '');
@@ -1272,7 +1279,7 @@ function buildTexts() {
       } else {
         if (o.num) parts.push(o.num);
       }
-      return { text: parts.join(', '), orderIdx: idx, postDelay: 6000 };
+      return { text: parts.join(', '), orderIdx: idx, postDelay: 7000 };
     });
   }
 
