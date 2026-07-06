@@ -1225,7 +1225,11 @@ function buildTexts() {
           );
           if (!d.length) result.push({ text: '(정보 없음)', orderIdx: idx, postDelay: sleeveGap });
         } else if (o.productType === 'plate') {
-          // 주차번호판 단독: 뒤4자리 (또는 8자리)
+          // 주차번호판 단독: 종류 변경 시 "주차번호판" 안내 후 뒤4자리 (또는 8자리)
+          if (prevProductType !== 'plate') {
+            result.push({ text: '주차번호판', orderIdx: idx, postDelay: dGap });
+          }
+          prevProductType = 'plate';
           const numD = plateDigitCount.get(idx) || 4;
           const d = (o.num || '').replace(/\D/g, '').slice(-numD);
           [...d].forEach((ch, i, arr) =>
