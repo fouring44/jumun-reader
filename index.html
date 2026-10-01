@@ -24,6 +24,7 @@
     --green-mid: #C0DD97;
     --green-dark: #3B6D11;
     --red: #A32D2D;
+    --red-hi: #D92B2B;
     --orange-light: #F5C4B3;
     --orange-dark: #993C1D;
     --amber: #BA7517;
@@ -46,6 +47,7 @@
       --green-light: #1a3020;
       --yellow-light: #5a4400;
       --pink-light: #5a1f33;
+      --red-hi: #FF7A7A;
       --accent: #E8B14A;
     }
   }
@@ -139,6 +141,7 @@
   td { padding: 6px 9px; border-bottom: 0.5px solid var(--border); white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   tr.row-skip td { opacity: 0.38; }
+  .num-black { color: var(--red-hi); font-weight: 800; }
   tr.row-multi td { background: var(--green-light); }
   tr.row-person-multi td { background: var(--pink-light); }
   tr.row-reading td { background: var(--blue-light) !important; }
@@ -1004,7 +1007,7 @@ function loadSheet(name) {
     if (currentMode === 'make' && o.productType === 'keyring' && o.sleeveMsg) {
       noteCell += ` <span class="badge badge-sleeve-msg">${o.sleeveMsg}</span>`;
     }
-    tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${o.numColor}</td><td>${o.num}</td><td>${noteCell}</td><td>${badge}</td>`;
+    tr.innerHTML = `<td class="${batchClass}">${batchLabel}</td><td>${o.no}</td><td>${o.name}</td><td>${o.leatherColor}</td><td>${numColorCell(o.numColor)}</td><td>${o.num}</td><td>${noteCell}</td><td>${badge}</td>`;
     if (!o.skip) {
       tr.style.cursor = 'pointer';
       tr.title = '클릭하여 선택 후 ▶ 읽기 시작을 누르세요';
@@ -1013,6 +1016,16 @@ function loadSheet(name) {
     tbody.appendChild(tr);
   });
   dataTable.appendChild(tbody);
+}
+
+// ═══════════════════════════════════════════════
+//  숫자컬러 셀 — 블랙은 붉게 강조
+// ═══════════════════════════════════════════════
+function numColorCell(numColor) {
+  if (!numColor) return '';
+  return /블랙|black/i.test(numColor)
+    ? `<span class="num-black">${numColor}</span>`
+    : numColor;
 }
 
 // ═══════════════════════════════════════════════
