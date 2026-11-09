@@ -647,6 +647,7 @@ function parseOrders(rows) {
       if (!last) continue;
       // 같은 사람의 추가 주문: 가죽컬러나 숫자가 별도로 있으면 새 주문으로 처리
       const hasDistinctData = (leatherColor && leatherColor !== last.leatherColor) ||
+                              (numColor && numColor !== last.numColor) ||
                               (num && num !== last.num);
       if (hasDistinctData) {
         const skip2        = !num || note.includes('확인중');
@@ -1028,6 +1029,12 @@ function numColorCell(numColor) {
     : numColor;
 }
 
+// 가죽컬러 뒤의 [G]/[B]는 링 색상(골드/블랙) 표기이고, 같은 값이 숫자컬러로 따로 읽힌다.
+// 한국어 TTS가 이걸 "지"/"비"로 읽어버리므로 발음용 텍스트에서만 떼어낸다(표에는 그대로 남음).
+function stripRingMark(s) {
+  return (s || '').replace(/\s*[[(（][GgBb][\])）]\s*/g, ' ').trim();
+}
+
 // ═══════════════════════════════════════════════
 //  제품 종류 레이블
 // ═══════════════════════════════════════════════
@@ -1036,7 +1043,7 @@ function getProductLabel(o) {
   if (o.productType === 'keyring') return '키링';
   if (o.leatherColor.toLowerCase().includes('vent')) return '벤트 방향제';
   if (o.leatherColor.includes('비상탈출')) return '비상탈출';
-  return o.leatherColor || '기타';
+  return stripRingMark(o.leatherColor) || '기타';
 }
 
 // ═══════════════════════════════════════════════
@@ -1069,9 +1076,9 @@ function buildTexts() {
   const validPairs = orders.map((o, idx) => ({ o, idx })).filter(({ o }) => !o.skip);
 
   if (currentMode === 'make') {
-    const leatherOf = o => o.leatherColor.includes('/')
+    const leatherOf = o => stripRingMark(o.leatherColor.includes('/')
       ? o.leatherColor.split('/')[1].trim()
-      : o.leatherColor;
+      : o.leatherColor);
 
     const nonOther = validPairs.filter(({ o }) => o.productType !== 'other');
     const others   = validPairs.filter(({ o }) => o.productType === 'other');
@@ -1309,19 +1316,19 @@ function buildTexts() {
     const parts = [];
     if (o.productType === 'plate') {
       const colorPart   = (o.leatherColor.split('/')[0] || '').trim();
-      const leatherPart = (o.leatherColor.split('/')[1] || '').trim();
+      const leatherPart = stripRingMark((o.leatherColor.split('/')[1] || '').trim());
       if (colorPart)   parts.push(`${colorPart} 플레이트`);
       if (leatherPart) parts.push(leatherPart);
       if (o.numColor)  parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '');
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else if (o.productType === 'keyring') {
-      if (o.leatherColor) parts.push(o.leatherColor);
+      if (o.leatherColor) parts.push(stripRingMark(o.leatherColor));
       if (o.numColor)     parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '');
       if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
     } else {
-      if (o.leatherColor) parts.push(o.leatherColor);
+      if (o.leatherColor) parts.push(stripRingMark(o.leatherColor));
       if (o.numColor)     parts.push(o.numColor);
       if (o.num)          parts.push(o.num);
     }
