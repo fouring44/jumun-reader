@@ -491,7 +491,8 @@ document.addEventListener('keydown', e => {
     statusText.textContent = `⏸ ${currentIdx + 1} / ${utterances.length}건에서 일시정지`;
   } else if (ttsState === 'paused') {
     setUIState('speaking');
-    speakAt(currentIdx, playSession);
+    const sess = playSession;
+    setTimeout(() => { if (sess === playSession && ttsState === 'speaking') speakAt(currentIdx, sess); }, 150);
   }
 });
 
@@ -1347,11 +1348,40 @@ function buildTexts() {
 }
 
 // ═══════════════════════════════════════════════
+//  오디오 keep-alive
+// ───────────────────────────────────────────────
+// 외장 USB/무선 스피커(예: Sabine)는 오디오 스트림이 쉬면 DAC를 잠재워
+// 다음 소리의 앞부분(수십~수백 ms)이 잘린다. 포장 모드 7초 간격·제작 콜드
+// 스타트에서 "한글 첫 음절이 씹히는" 증상의 원인.
+// → 재생 중 들리지 않는 저레벨 노이즈(≈-80dBFS)를 흘려 스트림을 열어둔다.
+let keepAliveCtx = null, keepAliveSrc = null;
+function keepAliveStart() {
+  try {
+    if (!keepAliveCtx) keepAliveCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (keepAliveCtx.state === 'suspended') keepAliveCtx.resume();
+    if (keepAliveSrc) return;                 // 이미 켜져 있음
+    const sr  = keepAliveCtx.sampleRate;
+    const buf = keepAliveCtx.createBuffer(1, sr, sr); // 1초 루프
+    const d   = buf.getChannelData(0);
+    // 완전한 0은 드라이버가 스트림을 쉬게 둘 수 있어 아주 작은 랜덤값을 채운다(≈-80dBFS, 사실상 무음)
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * 1e-4;
+    keepAliveSrc = keepAliveCtx.createBufferSource();
+    keepAliveSrc.buffer = buf; keepAliveSrc.loop = true;
+    keepAliveSrc.connect(keepAliveCtx.destination);
+    keepAliveSrc.start();
+  } catch (e) { /* AudioContext 실패해도 재생 자체는 계속 */ }
+}
+function keepAliveStop() {
+  if (keepAliveSrc) { try { keepAliveSrc.stop(); } catch (e) {} keepAliveSrc = null; }
+}
+
+// ═══════════════════════════════════════════════
 //  UI 상태
 // ═══════════════════════════════════════════════
 function setUIState(state) {
   ttsState = state;
   playSession++;  // 모든 상태 전환 시 세션 토큰 갱신 → 이전 utterance의 stale 콜백 무효화
+  if (state === 'speaking') keepAliveStart(); else keepAliveStop();
   if (state === 'idle') {
     playBtn.textContent = '▶ 읽기 시작';
     playBtn.className = 'btn btn-play';
@@ -1450,7 +1480,10 @@ playBtn.addEventListener('click', () => {
     }
     currentIdx = resumeIdx;
     window.speechSynthesis.cancel();
-    setUIState('speaking'); speakAt(resumeIdx, playSession);
+    setUIState('speaking');
+    // keep-alive 스트림이 장치를 깨울 시간을 짧게 확보(콜드 스타트 씹힘 방지)
+    const sess = playSession;
+    setTimeout(() => { if (sess === playSession && ttsState === 'speaking') speakAt(resumeIdx, sess); }, 150);
   } else {
     utterances = buildTexts();
     if (!utterances.length) { statusText.textContent = '읽을 데이터가 없습니다'; return; }
@@ -1465,7 +1498,9 @@ playBtn.addEventListener('click', () => {
     }
     currentIdx = startIdx;
     window.speechSynthesis.cancel();
-    setUIState('speaking'); speakAt(startIdx, playSession);
+    setUIState('speaking');
+    const sess = playSession;
+    setTimeout(() => { if (sess === playSession && ttsState === 'speaking') speakAt(startIdx, sess); }, 150);
   }
 });
 
