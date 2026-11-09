@@ -1035,6 +1035,14 @@ function stripRingMark(s) {
   return (s || '').replace(/\s*[[(（][GgBb][\])）]\s*/g, ' ').trim();
 }
 
+// macOS TTS는 쉼표마다 220~300ms 무음을 넣는다. 한글 구간을 쉼표로 이으면
+// 한 발화의 1/3이 무음이 되어 "끊겼다 이어지는" 느낌이 난다.
+// → 한글(이름·제품명·안내문구)은 공백으로 붙이고, 숫자 낱자 사이에만 쉼표를 남긴다.
+function joinSpeech(words, digits) {
+  const head = words.filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+  return [head, digits].filter(Boolean).join(', ');
+}
+
 // ═══════════════════════════════════════════════
 //  제품 종류 레이블
 // ═══════════════════════════════════════════════
@@ -1155,7 +1163,7 @@ function buildTexts() {
         if (isPlateMulti) firstParts.push(nativeCount(o.count));
         if (firstParts.length) {
           result.push({
-            text: firstParts.join(', '),
+            text: joinSpeech(firstParts, ''),
             orderIdx: idx,
             postDelay: (hasNumColor || hasDigits) ? 1300 : 3000
           });
@@ -1195,7 +1203,7 @@ function buildTexts() {
         if (label) p1Parts.push(label);
         p1Parts.push(colorPart ? `${colorPart} 플레이트` : '(정보 없음)');
         if (isPlateMulti)  p1Parts.push(nativeCount(o.count));
-        result.push({ text: p1Parts.join(', '), orderIdx: idx, postDelay: 1956 });
+        result.push({ text: joinSpeech(p1Parts, ''), orderIdx: idx, postDelay: 1956 });
       } else if (makeReadMode === 'plate2') {
         if (o.productType !== 'plate') return; // 주차번호판만 읽기
         const colorPart = o.leatherColor.split('/')[0].trim();
@@ -1204,7 +1212,7 @@ function buildTexts() {
         if (isPlateMulti)  firstParts.push(nativeCount(o.count));
         if (leather)      firstParts.push(leather);
         if (o.numColor)   firstParts.push(o.numColor);
-        if (firstParts.length) result.push({ text: firstParts.join(', '), orderIdx: idx, postDelay: 300 });
+        if (firstParts.length) result.push({ text: joinSpeech(firstParts, ''), orderIdx: idx, postDelay: 300 });
         const digits = (o.num || '').replace(/\D/g, '').slice(-4).split('').filter(Boolean);
         digits.forEach((d, i) => {
           result.push({
@@ -1298,22 +1306,24 @@ function buildTexts() {
       const lbl = getProductLabel(o);
       if (lbl !== prevLbl) parts.push(lbl);
       prevLbl = lbl;
+      let digits = '';
       if (o.productType === 'plate') {
         const d = (o.num || '').replace(/\D/g, '').slice(-4);
-        if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+        if (d) digits = d.split('').map(c => DIGIT[+c]).join(', ');
       } else if (o.productType === 'keyring') {
         const d = (o.num || '').replace(/\D/g, '').slice(0, 4);
-        if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+        if (d) digits = d.split('').map(c => DIGIT[+c]).join(', ');
       } else {
-        if (o.num) parts.push(o.num);
+        if (o.num) digits = o.num;
       }
-      return { text: parts.join(', '), orderIdx: idx, postDelay: 7000 };
+      return { text: joinSpeech(parts, digits), orderIdx: idx, postDelay: 7000 };
     });
   }
 
   // 검수 모드: 플레이트색상 → 가죽종류 → 숫자색상 → 숫자(전체)
   return validPairs.map(({ o, idx }) => {
     const parts = [];
+    let digits = '';
     if (o.productType === 'plate') {
       const colorPart   = (o.leatherColor.split('/')[0] || '').trim();
       const leatherPart = stripRingMark((o.leatherColor.split('/')[1] || '').trim());
@@ -1321,18 +1331,18 @@ function buildTexts() {
       if (leatherPart) parts.push(leatherPart);
       if (o.numColor)  parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '');
-      if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+      if (d) digits = d.split('').map(c => DIGIT[+c]).join(', ');
     } else if (o.productType === 'keyring') {
       if (o.leatherColor) parts.push(stripRingMark(o.leatherColor));
       if (o.numColor)     parts.push(o.numColor);
       const d = (o.num || '').replace(/\D/g, '');
-      if (d) parts.push(d.split('').map(c => DIGIT[+c]).join(', '));
+      if (d) digits = d.split('').map(c => DIGIT[+c]).join(', ');
     } else {
       if (o.leatherColor) parts.push(stripRingMark(o.leatherColor));
       if (o.numColor)     parts.push(o.numColor);
-      if (o.num)          parts.push(o.num);
+      if (o.num)          digits = o.num;
     }
-    return { text: parts.join(', ') || '(정보 없음)', orderIdx: idx, postDelay: 1956 };
+    return { text: joinSpeech(parts, digits) || '(정보 없음)', orderIdx: idx, postDelay: 1956 };
   });
 }
 
