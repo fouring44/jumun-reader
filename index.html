@@ -621,15 +621,12 @@ function parseOrders(rows) {
   const C_INV     = colMap['송장']     ?? -1;
   const C_SLEEVE  = colMap['슬리브']   ?? -1;
   const headers   = rows[hi].map(str);
-  const orders = []; let last = null, blankRunLen = 0, sectionBatch = null;
+  const orders = []; let last = null;
+  const batchByType = {}; // 제품종류별 현재 차수 (plate / keyring / other)
 
   for (let i = hi + 1; i < rows.length; i++) {
     const row = rows[i];
-    if (!row || row.every(c => c == null || str(c) === '')) {
-      if (++blankRunLen >= 2) sectionBatch = null; // 섹션(제품종류) 구분 → 차수 초기화
-      continue;
-    }
-    blankRunLen = 0;
+    if (!row || row.every(c => c == null || str(c) === '')) continue;
     const no   = str(row[C_NO]);
     const name = str(row[C_NAME]);
     const num  = str(row[C_NUM]);
@@ -639,10 +636,14 @@ function parseOrders(rows) {
     const invoice      = C_INV     >= 0 ? str(row[C_INV])     : '';
     const sleeve       = C_SLEEVE  >= 0 ? str(row[C_SLEEVE])  : '';
     const sleeveMsg    = detectSleeveMsg(sleeve);
-    // 차수 마커 감지 → 섹션 내 전파
+    // 차수 마커는 제품종류별로 전파:
+    // 키링 행에 '2차'가 나오면 그 이후 키링은 모두 2차, 주차번호판은 별도로 1차부터 시작해
+    // 주차번호판 행에 '2차'가 나온 이후 주차번호판만 2차. 3차·4차도 동일(새 마커가 나오면 갱신).
+    let rowType = detectProductType(leatherColor, num);
+    if (!no && !name && last && !leatherColor) rowType = last.productType; // 같은 옵션 연속 행
     const rowBatch = detectBatch(invoice);
-    if (rowBatch) sectionBatch = rowBatch;
-    const batch = sectionBatch;
+    if (rowBatch) batchByType[rowType] = rowBatch;
+    const batch = batchByType[rowType] || null;
 
     if (!no && !name) {
       if (!last) continue;
