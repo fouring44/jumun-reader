@@ -1099,7 +1099,9 @@ function buildTexts() {
     let setFirstMap = new Map();     // first idx → { keyringDigits, plateDigits }
     let setSkipSet  = new Set();     // second idx (건너뜀)
     if (makeReadMode === 'sleeve') {
-      // ① 같은 주문자가 주차번호판을 2개 이상 구매한 경우: 뒤4자리가 모두 같으면 8자리, 모두 동일하면 4자리
+      // ① 같은 주문자가 주차번호판을 2개 이상 구매한 경우:
+      //    뒤4자리가 같고 앞자리가 다른 번호판이 하나라도 있으면 그 번호판들은 8자리(앞4+뒤4)로 읽음.
+      //    (예: 커플 4개 중 2개만 뒤4자리 7112로 같아도 그 2개는 8자리. 번호 전체가 같으면 4자리)
       const personPlates = new Map();
       nonOther.forEach(({ o, idx }) => {
         if (o.productType !== 'plate' || o.multiType === 'set') return;
@@ -1108,10 +1110,10 @@ function buildTexts() {
         personPlates.get(o.name).push({ idx, last4: full.slice(-4), full });
       });
       personPlates.forEach(list => {
-        if (list.length < 2) { list.forEach(p => plateDigitCount.set(p.idx, 4)); return; }
-        const same4    = list.every(p => p.last4 === list[0].last4);
-        const sameFull = list.every(p => p.full  === list[0].full);
-        list.forEach(p => plateDigitCount.set(p.idx, (same4 && !sameFull) ? 8 : 4));
+        list.forEach(p => {
+          const clash = list.some(q => q !== p && q.last4 === p.last4 && q.full !== p.full);
+          plateDigitCount.set(p.idx, clash ? 8 : 4);
+        });
       });
       // ② 세트(주차번호판+키링 동일인) 페어링
       const setPersons = new Map();
@@ -1233,8 +1235,10 @@ function buildTexts() {
         const sleeveGap = Math.round(1956 * 1.3); // ≈2543ms (플레이트 행간 * 1.3)
         const dGap = 309;
         if (setFirstMap.has(idx)) {
-          // 세트: '키링 OOOO', '주차번호 OOOO' 순으로 읽기
+          // 세트: '세트상품' 안내 후 '키링 OOOO', '주차번호 OOOO' 순으로 읽기
           const { keyringDigits, plateDigits } = setFirstMap.get(idx);
+          result.push({ text: '세트상품', orderIdx: idx, postDelay: 600 });
+          prevProductType = null; // 세트 다음 단독 상품은 종류명 다시 안내
           result.push({ text: '키링', orderIdx: idx, postDelay: dGap });
           [...keyringDigits].forEach(d =>
             result.push({ text: DIGIT[+d], orderIdx: idx, postDelay: dGap, numRate2: true })
@@ -1262,6 +1266,8 @@ function buildTexts() {
           prevProductType = 'plate';
           const numD = plateDigitCount.get(idx) || 4;
           const d = (o.num || '').replace(/\D/g, '').slice(-numD);
+          // 8자리는 숫자 읽기 전에 미리 안내
+          if (numD === 8 && d.length === 8) result.push({ text: '여덟자리 숫자', orderIdx: idx, postDelay: 600 });
           [...d].forEach((ch, i, arr) =>
             result.push({ text: DIGIT[+ch], orderIdx: idx, postDelay: i < arr.length - 1 ? dGap : sleeveGap, numRate2: true })
           );
@@ -1291,11 +1297,15 @@ function buildTexts() {
   if (currentMode === 'pack') {
     // 연속 동일이름 그룹 탐지 → 첫 항목에 'N개주문입니다' 삽입
     const multiStart = new Map(); // validPairs 인덱스 → 연속 개수
+    const inMultiRun = new Set(); // 연속 그룹에 속한 인덱스 (첫 항목 외)
     let gi = 0;
     while (gi < validPairs.length) {
       let j = gi + 1;
       while (j < validPairs.length && validPairs[j].o.name === validPairs[gi].o.name) j++;
-      if (j - gi >= 2) multiStart.set(gi, j - gi);
+      if (j - gi >= 2) {
+        multiStart.set(gi, j - gi);
+        for (let k = gi + 1; k < j; k++) inMultiRun.add(k);
+      }
       gi = j;
     }
 
@@ -1304,6 +1314,9 @@ function buildTexts() {
       const parts = [o.name];
       if (multiStart.has(vi)) {
         parts.push(o.multiType === 'set' ? '세트상품입니다' : `${multiStart.get(vi)}개주문입니다`);
+      } else if (o.multiType === 'set' && !inMultiRun.has(vi)) {
+        // 세트(주차번호판+키링 동일인)가 서로 떨어진 행에 있어도 각 행에서 세트상품 안내
+        parts.push('세트상품입니다');
       }
       const lbl = getProductLabel(o);
       if (lbl !== prevLbl) parts.push(lbl);
